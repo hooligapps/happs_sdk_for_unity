@@ -10,6 +10,7 @@ namespace HAppsSDK
         public event Action<UserData> OnProfile;
         public event Action<PaymentData> OnPaymentCreated;
         public event Action<PaymentData> OnPaymentCompleted;
+        public event Action<string> OnAuthTicket;
 
         public void OnHooligappsMessage(string json)
         {
@@ -47,6 +48,10 @@ namespace HAppsSDK
                 case "paymentComplete":
                     OnPaymentCompleted?.Invoke(msg.paymentData);
                     break;
+                
+                case "authTicket":
+                    OnAuthTicket?.Invoke(msg.authTicket);
+                    break;
             }
         }
 
@@ -63,11 +68,13 @@ namespace HAppsSDK
 
         public void SendMessage(string type, string payloadJson)
         {
+            Debug.Log($"HAppsJSBridge.SendMessage {type} {payloadJson}");
             _sendMessage(type, payloadJson);
         }
 
         public void OpenAuthPopup(string url)
         {
+            Debug.Log($"HAppsJSBridge.OpenAuthPopup {url}");
             _openAuthPopup(url);
         }
     }

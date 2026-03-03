@@ -18,7 +18,7 @@ namespace HAppsSDK
 		public abstract Task<bool> Initialize();
 		public abstract Task<UserData> RequestProfile();
 		public abstract Task<PaymentData> RequestPayment(PaymentItem item);
-		public abstract void OpenAuthPopup();
+		public abstract Task<string> OpenAuthPopup(string url);
 	}
 	
 	
@@ -31,6 +31,7 @@ namespace HAppsSDK
 			public UserData userData;
 			public SignatureData signatureData;
 			public PaymentData paymentData;
+			public string authTicket;
 		}
 		
 		[Serializable]

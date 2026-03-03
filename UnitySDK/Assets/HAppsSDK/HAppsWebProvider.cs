@@ -11,7 +11,8 @@ namespace HAppsSDK
             None,
             Init,
             Profile,
-            Payment
+            Payment,
+            AuthTicket,
         }
 
         private const int DEFAULT_TIMEOUT_MS = 30000;
@@ -19,7 +20,7 @@ namespace HAppsSDK
         private readonly HAppsJSBridge _bridge;
 
         private OperationType _currentOperation = OperationType.None;
-        private TaskCompletionSource<object> _operationTcs;
+        private TaskCompletionSource<object> _currentTcs;
 
         public HAppsWebProvider()
         {
@@ -30,40 +31,26 @@ namespace HAppsSDK
 
             _bridge.OnInitialized += HandleInitialized;
             _bridge.OnProfile += HandleProfile;
-            _bridge.OnPaymentCreated += HandlePaymentCreated;
             _bridge.OnPaymentCompleted += HandlePaymentCompleted;
+            _bridge.OnAuthTicket += HandleAuthTicket;
         }
 
         #region Public API
 
         public override async Task<bool> Initialize()
         {
-            var task = StartOperation<bool>(OperationType.Init);
-
-            _bridge.SendMessage("init", "{}");
-
-#if UNITY_EDITOR
-            HandleInitialized(new InitData { ready = true }, null, null);
-#endif
-
-            return await WithTimeout(task, DEFAULT_TIMEOUT_MS);
+            return await StartOperation<bool>(
+                OperationType.Init,
+                () => _bridge.SendMessage("init", "{}"),
+                DEFAULT_TIMEOUT_MS);
         }
 
         public override async Task<UserData> RequestProfile()
         {
-            var task = StartOperation<UserData>(OperationType.Profile);
-
-            _bridge.SendMessage("getProfile", "{}");
-
-#if UNITY_EDITOR
-            HandleProfile(new UserData
-            {
-                userId = "editor",
-                userName = "EditorUser"
-            });
-#endif
-
-            return await WithTimeout(task, DEFAULT_TIMEOUT_MS);
+            return await StartOperation<UserData>(
+                OperationType.Profile,
+                () => _bridge.SendMessage("getProfile", "{}"),
+                DEFAULT_TIMEOUT_MS);
         }
 
         public override async Task<PaymentData> RequestPayment(PaymentItem item)
@@ -71,87 +58,98 @@ namespace HAppsSDK
             if (item == null)
                 throw new ArgumentNullException(nameof(item));
 
-            var task = StartOperation<PaymentData>(OperationType.Payment);
-
             var json = JsonUtility.ToJson(new PaymentRequest { item = item });
 
-            Debug.Log($"[HApps] Request payment: {item.itemId} x{item.quantity}");
-
-            _bridge.SendMessage("makePayment", json);
-
-            return await WithTimeout(task, DEFAULT_TIMEOUT_MS);
+            return await StartOperation<PaymentData>(
+                OperationType.Payment,
+                () => _bridge.SendMessage("makePayment", json),
+                DEFAULT_TIMEOUT_MS);
         }
 
-        public override void OpenAuthPopup()
+        public override async Task<string> OpenAuthPopup(string url)
         {
-            var apiEndpoint = "";
-            var url = $"{apiEndpoint}/auth/idp?token=1";
+            // перезапуск auth = отмена старого
+            if (_currentOperation == OperationType.AuthTicket)
+            {
+                _currentTcs?.TrySetResult(null);
+                Reset();
+            }
 
-#if UNITY_WEBGL && !UNITY_EDITOR
-            _bridge.OpenAuthPopup(url);
-#else
-            Application.OpenURL(url);
-#endif
+            return await StartOperation<string>(
+                OperationType.AuthTicket,
+                () => _bridge.OpenAuthPopup(url),
+                timeoutMs: null);
         }
 
         #endregion
 
-        #region Operation Control
+        #region Core
 
-        private Task<T> StartOperation<T>(OperationType type)
+        private async Task<T> StartOperation<T>(
+            OperationType type,
+            Action startAction,
+            int? timeoutMs)
         {
             if (_currentOperation != OperationType.None)
-            {
                 throw new InvalidOperationException(
-                    $"HApps operation already in progress: {_currentOperation}");
-            }
+                    $"Operation already in progress: {_currentOperation}");
+
+            Debug.Log($"[HApps] Starting {type}");
 
             _currentOperation = type;
-
-            _operationTcs = new TaskCompletionSource<object>(
+            _currentTcs = new TaskCompletionSource<object>(
                 TaskCreationOptions.RunContinuationsAsynchronously);
 
-            return _operationTcs.Task.ContinueWith(t => (T)t.Result);
+            startAction?.Invoke();
+
+            Task<object> task = _currentTcs.Task;
+
+            if (timeoutMs.HasValue)
+            {
+                task = WithTimeout(task, timeoutMs.Value);
+            }
+
+            var result = await task;
+
+            return (T)result;
         }
 
-        private void CompleteOperation(object result)
-        {
-            _operationTcs?.TrySetResult(result);
-            ResetOperation();
-        }
-
-        private void FailOperation(Exception ex)
-        {
-            _operationTcs?.TrySetException(ex);
-            ResetOperation();
-        }
-
-        private void ResetOperation()
-        {
-            _operationTcs = null;
-            _currentOperation = OperationType.None;
-        }
-
-        private async Task<T> WithTimeout<T>(Task<T> task, int timeoutMs)
+        private async Task<object> WithTimeout(Task<object> task, int timeoutMs)
         {
             var timeoutTask = Task.Delay(timeoutMs);
-
             var completed = await Task.WhenAny(task, timeoutTask);
 
             if (completed == timeoutTask)
             {
-                ResetOperation();
+                Reset();
                 throw new TimeoutException("HApps operation timeout");
             }
 
             return await task;
         }
 
+        private void Complete(object result)
+        {
+            Debug.Log($"[HApps] Completed {_currentOperation}: {result}");
+
+            _currentTcs?.TrySetResult(result);
+            Reset();
+        }
+
+        private void Reset()
+        {
+            _currentOperation = OperationType.None;
+            _currentTcs = null;
+        }
+
         #endregion
 
         #region JS Callbacks
 
-        private void HandleInitialized(InitData init, UserData user, SignatureData signature)
+        private void HandleInitialized(
+            InitData init,
+            UserData user,
+            SignatureData signature)
         {
             if (_currentOperation != OperationType.Init)
                 return;
@@ -165,7 +163,7 @@ namespace HAppsSDK
             Signature = signature?.signature;
             _isInitialized = init?.ready == true || user != null;
 
-            CompleteOperation(_isInitialized);
+            Complete(_isInitialized);
         }
 
         private void HandleProfile(UserData user)
@@ -173,18 +171,10 @@ namespace HAppsSDK
             if (_currentOperation != OperationType.Profile)
                 return;
 
-            if (user != null)
-            {
-                _userData = user;
-                _loggedIn = true;
-            }
+            _userData = user;
+            _loggedIn = user != null;
 
-            CompleteOperation(user);
-        }
-
-        private void HandlePaymentCreated(PaymentData data)
-        {
-            Debug.Log($"[HApps] Payment started: {data?.paymentId}");
+            Complete(user);
         }
 
         private void HandlePaymentCompleted(PaymentData data)
@@ -192,7 +182,15 @@ namespace HAppsSDK
             if (_currentOperation != OperationType.Payment)
                 return;
 
-            CompleteOperation(data);
+            Complete(data);
+        }
+
+        private void HandleAuthTicket(string ticket)
+        {
+            if (_currentOperation != OperationType.AuthTicket)
+                return;
+
+            Complete(ticket);
         }
 
         #endregion
