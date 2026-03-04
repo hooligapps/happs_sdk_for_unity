@@ -18,21 +18,24 @@ namespace HAppsSDK
         private const int DEFAULT_TIMEOUT_MS = 30000;
 
         private readonly HAppsJSBridge _bridge;
+        private readonly GameObject _bridgeGo;
 
         private OperationType _currentOperation = OperationType.None;
         private TaskCompletionSource<object> _currentTcs;
 
         public HAppsWebProvider()
         {
-            var go = new GameObject("HAppsJSBridge");
-            UnityEngine.Object.DontDestroyOnLoad(go);
+            _bridgeGo = new GameObject("HAppsManager");
+            UnityEngine.Object.DontDestroyOnLoad(_bridgeGo);
 
-            _bridge = go.AddComponent<HAppsJSBridge>();
+            _bridge = _bridgeGo.AddComponent<HAppsJSBridge>();
 
             _bridge.OnInitialized += HandleInitialized;
             _bridge.OnProfile += HandleProfile;
             _bridge.OnPaymentCompleted += HandlePaymentCompleted;
             _bridge.OnAuthTicket += HandleAuthTicket;
+            _bridge.OnRegisterComplete += HandleRegisterComplete;
+            _bridge.OnVisibility += HandleVisibility;
         }
 
         #region Public API
@@ -41,7 +44,7 @@ namespace HAppsSDK
         {
             return await StartOperation<bool>(
                 OperationType.Init,
-                () => _bridge.SendMessage("init", "{}"),
+                () => _bridge.SendToJS("init", "{}"),
                 DEFAULT_TIMEOUT_MS);
         }
 
@@ -49,7 +52,7 @@ namespace HAppsSDK
         {
             return await StartOperation<UserData>(
                 OperationType.Profile,
-                () => _bridge.SendMessage("getProfile", "{}"),
+                () => _bridge.SendToJS("getProfile", "{}"),
                 DEFAULT_TIMEOUT_MS);
         }
 
@@ -62,13 +65,15 @@ namespace HAppsSDK
 
             return await StartOperation<PaymentData>(
                 OperationType.Payment,
-                () => _bridge.SendMessage("makePayment", json),
+                () => _bridge.SendToJS("makePayment", json),
                 DEFAULT_TIMEOUT_MS);
         }
 
         public override async Task<string> OpenAuthPopup(string url)
         {
-            // перезапуск auth = отмена старого
+            if (string.IsNullOrEmpty(url) || !url.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                throw new ArgumentException("[HApps] Auth popup URL must use https://", nameof(url));
+
             if (_currentOperation == OperationType.AuthTicket)
             {
                 _currentTcs?.TrySetResult(null);
@@ -79,6 +84,25 @@ namespace HAppsSDK
                 OperationType.AuthTicket,
                 () => _bridge.OpenAuthPopup(url),
                 timeoutMs: null);
+        }
+
+        public override void Destroy()
+        {
+            if (_bridge != null)
+            {
+                _bridge.OnInitialized -= HandleInitialized;
+                _bridge.OnProfile -= HandleProfile;
+                _bridge.OnPaymentCompleted -= HandlePaymentCompleted;
+                _bridge.OnAuthTicket -= HandleAuthTicket;
+                _bridge.OnRegisterComplete -= HandleRegisterComplete;
+                _bridge.OnVisibility -= HandleVisibility;
+            }
+
+            _currentTcs?.TrySetCanceled();
+            Reset();
+
+            if (_bridgeGo != null)
+                UnityEngine.Object.Destroy(_bridgeGo);
         }
 
         #endregion
@@ -105,12 +129,9 @@ namespace HAppsSDK
             Task<object> task = _currentTcs.Task;
 
             if (timeoutMs.HasValue)
-            {
                 task = WithTimeout(task, timeoutMs.Value);
-            }
 
             var result = await task;
-
             return (T)result;
         }
 
@@ -121,8 +142,9 @@ namespace HAppsSDK
 
             if (completed == timeoutTask)
             {
+                _currentTcs?.TrySetCanceled();
                 Reset();
-                throw new TimeoutException("HApps operation timeout");
+                throw new TimeoutException($"[HApps] Operation timed out after {timeoutMs}ms");
             }
 
             return await task;
@@ -130,8 +152,6 @@ namespace HAppsSDK
 
         private void Complete(object result)
         {
-            Debug.Log($"[HApps] Completed {_currentOperation}: {result}");
-
             _currentTcs?.TrySetResult(result);
             Reset();
         }
@@ -146,10 +166,7 @@ namespace HAppsSDK
 
         #region JS Callbacks
 
-        private void HandleInitialized(
-            InitData init,
-            UserData user,
-            SignatureData signature)
+        private void HandleInitialized(InitData init, UserData user, SignatureData signature)
         {
             if (_currentOperation != OperationType.Init)
                 return;
@@ -191,6 +208,23 @@ namespace HAppsSDK
                 return;
 
             Complete(ticket);
+        }
+
+        private void HandleRegisterComplete(UserData user, SignatureData signature)
+        {
+            if (user != null)
+            {
+                _userData = user;
+                _loggedIn = true;
+            }
+
+            Signature = signature?.signature;
+            NotifyUserChanged(user);
+        }
+
+        private void HandleVisibility(bool visible)
+        {
+            NotifyVisibilityChanged(visible);
         }
 
         #endregion

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using UnityEngine;
 
@@ -6,15 +7,35 @@ namespace HAppsSDK
 {
     public sealed class HAppsJSBridge : MonoBehaviour
     {
+        private const int MaxJsonLength = 8192; // 8KB
+        private const int MaxUserIdLength = 64;
+        private const int MaxUserNameLength = 128;
+        private const int MaxSignatureLength = 512;
+
+        private static readonly HashSet<string> AllowedTypes = new HashSet<string>
+        {
+            "init", "profile", "paymentComplete", "authTicket", "register_complete", "visibility"
+        };
+
         public event Action<InitData, UserData, SignatureData> OnInitialized;
         public event Action<UserData> OnProfile;
-        public event Action<PaymentData> OnPaymentCreated;
         public event Action<PaymentData> OnPaymentCompleted;
         public event Action<string> OnAuthTicket;
+        public event Action<UserData, SignatureData> OnRegisterComplete;
+        public event Action<bool> OnVisibility;
 
-        public void OnHooligappsMessage(string json)
+        /// <summary>
+        /// Called from JavaScript via SendMessage("HAppsManager", "OnHAppsMessage", json).
+        /// </summary>
+        public void OnHAppsMessage(string json)
         {
-            Debug.Log($"[HApps] JS → {json}");
+            if (string.IsNullOrEmpty(json) || json.Length > MaxJsonLength)
+            {
+                Debug.LogWarning($"[HApps] Message rejected: invalid length ({json?.Length ?? 0})");
+                return;
+            }
+
+            Debug.Log($"[HApps] JS → type={TryParseType(json)}");
 
             HAppsMessage msg;
 
@@ -24,11 +45,20 @@ namespace HAppsSDK
             }
             catch (Exception e)
             {
-                Debug.LogError($"[HApps] JSON parse error: {e}");
+                Debug.LogError($"[HApps] JSON parse error: {e.Message}");
                 return;
             }
 
             if (msg == null || string.IsNullOrEmpty(msg.type))
+                return;
+
+            if (!AllowedTypes.Contains(msg.type))
+            {
+                Debug.LogWarning($"[HApps] Unknown message type: {msg.type}");
+                return;
+            }
+
+            if (!ValidateFields(msg))
                 return;
 
             switch (msg.type)
@@ -41,18 +71,49 @@ namespace HAppsSDK
                     OnProfile?.Invoke(msg.userData);
                     break;
 
-                case "payment":
-                    OnPaymentCreated?.Invoke(msg.paymentData);
-                    break;
-
                 case "paymentComplete":
                     OnPaymentCompleted?.Invoke(msg.paymentData);
                     break;
-                
+
                 case "authTicket":
                     OnAuthTicket?.Invoke(msg.authTicket);
                     break;
+
+                case "register_complete":
+                    OnRegisterComplete?.Invoke(msg.userData, msg.signatureData);
+                    break;
+
+                case "visibility":
+                    var visible = msg.initData?.ready == true;
+                    OnVisibility?.Invoke(visible);
+                    break;
             }
+        }
+
+        private static bool ValidateFields(HAppsMessage msg)
+        {
+            if (msg.userData != null)
+            {
+                if (msg.userData.userId != null && msg.userData.userId.Length > MaxUserIdLength)
+                {
+                    Debug.LogWarning("[HApps] userId exceeds max length");
+                    return false;
+                }
+
+                if (msg.userData.userName != null && msg.userData.userName.Length > MaxUserNameLength)
+                {
+                    Debug.LogWarning("[HApps] userName exceeds max length");
+                    return false;
+                }
+            }
+
+            if (msg.signatureData?.signature != null && msg.signatureData.signature.Length > MaxSignatureLength)
+            {
+                Debug.LogWarning("[HApps] signature exceeds max length");
+                return false;
+            }
+
+            return true;
         }
 
 #if UNITY_WEBGL && !UNITY_EDITOR
@@ -62,20 +123,37 @@ namespace HAppsSDK
         [DllImport("__Internal")]
         private static extern void _openAuthPopup(string url);
 #else
-        private static void _sendMessage(string type, string message) { }
-        private static void _openAuthPopup(string url) { }
+        private static void _sendMessage(string type, string message)
+        {
+            Debug.Log($"[HApps][Editor] _sendMessage({type})");
+        }
+
+        private static void _openAuthPopup(string url)
+        {
+            Debug.Log($"[HApps][Editor] _openAuthPopup({url})");
+        }
 #endif
 
-        public void SendMessage(string type, string payloadJson)
+        public void SendToJS(string type, string payloadJson)
         {
-            Debug.Log($"HAppsJSBridge.SendMessage {type} {payloadJson}");
+            Debug.Log($"[HApps] → JS type={type}");
             _sendMessage(type, payloadJson);
         }
 
         public void OpenAuthPopup(string url)
         {
-            Debug.Log($"HAppsJSBridge.OpenAuthPopup {url}");
+            Debug.Log("[HApps] Opening auth popup");
             _openAuthPopup(url);
+        }
+
+        private static string TryParseType(string json)
+        {
+            const string key = "\"type\":\"";
+            var idx = json.IndexOf(key, StringComparison.Ordinal);
+            if (idx < 0) return "?";
+            var start = idx + key.Length;
+            var end = json.IndexOf('"', start);
+            return end > start ? json.Substring(start, end - start) : "?";
         }
     }
 }

@@ -1,153 +1,86 @@
 mergeInto(LibraryManager.library, {
 
     _sendMessage: function (typePtr, messagePtr) {
-        var jsType = UTF8ToString(typePtr);
-        var jsMessage = UTF8ToString(messagePtr);
+        var type = UTF8ToString(typePtr);
+        var message = UTF8ToString(messagePtr);
 
-        console.log("[HApps][JS] _sendMessage → Unity",
-            "type:", jsType,
-            "message:", jsMessage
-        );
-
-        if (!window.unityInstance) {
-            console.error("[HApps][JS] unityInstance not found");
+        if (typeof window.HApps === "undefined" || typeof window.HApps.onUnityEvent !== "function") {
+            console.error("[HApps] window.HApps.onUnityEvent not available");
             return;
         }
 
-        window.unityInstance.SendMessage(
-            "HAppsJSBridge",
-            "OnHooligappsMessage",
-            jsMessage
-        );
+        window.HApps.onUnityEvent(type, message);
     },
 
     _openAuthPopup: function (urlPtr) {
 
-        const url = UTF8ToString(urlPtr);
-        const expectedOrigin = new URL(url).origin;
+        var url = UTF8ToString(urlPtr);
 
-        const width = 480;
-        const height = 770;
-
-        // ---- центрирование ----
-        const dualScreenLeft = window.screenLeft !== undefined
-            ? window.screenLeft
-            : window.screenX;
-
-        const dualScreenTop = window.screenTop !== undefined
-            ? window.screenTop
-            : window.screenY;
-
-        const windowWidth = window.innerWidth
-            || document.documentElement.clientWidth
-            || screen.width;
-
-        const windowHeight = window.innerHeight
-            || document.documentElement.clientHeight
-            || screen.height;
-
-        const left = dualScreenLeft + (windowWidth - width) / 2;
-        const top = dualScreenTop + (windowHeight - height) / 2;
-        // ------------------------
-
-        console.log("[HApps][JS] Opening auth popup:",
-            "url:", url,
-            "expectedOrigin:", expectedOrigin,
-            "left:", left,
-            "top:", top
-        );
-
-        const popup = window.open(
-            url,
-            "oidc_popup",
-            `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
-        );
-
-        console.log("[HApps][JS] popup object:", popup);
-
-        if (!popup) {
-            console.warn("[HApps][JS] Popup blocked by browser");
-
-            window.unityInstance.SendMessage(
-                "HAppsJSBridge",
-                "OnHooligappsMessage",
-                JSON.stringify({ type: "authTicket", authTicket: "" })
-            );
+        // Validate URL scheme — only allow https
+        if (url.indexOf("https://") !== 0) {
+            console.error("[HApps] Auth popup URL rejected: must use https://");
             return;
         }
 
-        let resolved = false;
+        var expectedOrigin = new URL(url).origin;
+
+        var width = 480;
+        var height = 770;
+
+        var dualScreenLeft = window.screenLeft !== undefined ? window.screenLeft : window.screenX;
+        var dualScreenTop = window.screenTop !== undefined ? window.screenTop : window.screenY;
+
+        var windowWidth = window.innerWidth || document.documentElement.clientWidth || screen.width;
+        var windowHeight = window.innerHeight || document.documentElement.clientHeight || screen.height;
+
+        var left = dualScreenLeft + (windowWidth - width) / 2;
+        var top = dualScreenTop + (windowHeight - height) / 2;
+
+        var popup = window.open(
+            url,
+            "oidc_popup",
+            "width=" + width + ",height=" + height + ",left=" + left + ",top=" + top + ",resizable=yes,scrollbars=yes"
+        );
+
+        function sendAuthTicket(ticket) {
+            if (typeof window.HApps !== "undefined" && typeof window.HApps.onUnityEvent === "function") {
+                window.HApps.onUnityEvent("authTicket", JSON.stringify({ authTicket: ticket || "" }));
+            }
+        }
+
+        if (!popup) {
+            console.warn("[HApps] Popup blocked by browser");
+            sendAuthTicket("");
+            return;
+        }
+
+        var resolved = false;
 
         function resolve(ticket) {
-
-            if (resolved) {
-                console.warn("[HApps][JS] resolve() called twice — ignored");
-                return;
-            }
-
+            if (resolved) return;
             resolved = true;
-
-            console.log("[HApps][JS] Resolving auth popup. Ticket:",
-                ticket ? "[RECEIVED]" : "[EMPTY]"
-            );
 
             window.removeEventListener("message", onMessage);
             clearInterval(interval);
 
-            try {
-                popup.close();
-                console.log("[HApps][JS] Popup closed");
-            } catch (e) {
-                console.warn("[HApps][JS] Failed to close popup:", e);
-            }
+            try { popup.close(); } catch (e) { }
 
-            window.unityInstance.SendMessage(
-                "HAppsJSBridge",
-                "OnHooligappsMessage",
-                JSON.stringify({
-                    type: "authTicket",
-                    authTicket: ticket || ""
-                })
-            );
+            sendAuthTicket(ticket);
         }
 
         function onMessage(event) {
+            if (event.origin !== expectedOrigin) return;
 
-            console.log("[HApps][JS] postMessage received:",
-                "origin:", event.origin,
-                "data:", event.data
-            );
-
-            if (event.origin !== expectedOrigin) {
-                console.warn("[HApps][JS] Ignored message from unexpected origin:",
-                    event.origin
-                );
-                return;
-            }
-
-            const data = event.data;
-
-            if (!data || !data.ticket) {
-                console.warn("[HApps][JS] Message has no ticket");
-                return;
-            }
-
-            console.log("[HApps][JS] Auth ticket received");
+            var data = event.data;
+            if (!data || !data.ticket) return;
 
             resolve(data.ticket);
         }
 
         window.addEventListener("message", onMessage, false);
 
-        console.log("[HApps][JS] Listening for postMessage...");
-
-        const interval = setInterval(function () {
-
-            if (popup.closed) {
-                console.log("[HApps][JS] Popup manually closed by user");
-                resolve("");
-            }
-
+        var interval = setInterval(function () {
+            if (popup.closed) resolve("");
         }, 500);
     }
 });
