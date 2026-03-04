@@ -14,7 +14,7 @@ namespace HAppsSDK
 
         private static readonly HashSet<string> AllowedTypes = new HashSet<string>
         {
-            "init", "profile", "paymentComplete", "authTicket", "register_complete", "visibility"
+            "init", "profile", "payment_complete", "auth_ticket", "register_complete", "visibility"
         };
 
         public event Action<InitData, UserData, SignatureData> OnInitialized;
@@ -71,11 +71,11 @@ namespace HAppsSDK
                     OnProfile?.Invoke(msg.userData);
                     break;
 
-                case "paymentComplete":
+                case "payment_complete":
                     OnPaymentCompleted?.Invoke(msg.paymentData);
                     break;
 
-                case "authTicket":
+                case "auth_ticket":
                     OnAuthTicket?.Invoke(msg.authTicket);
                     break;
 
@@ -119,18 +119,10 @@ namespace HAppsSDK
 #if UNITY_WEBGL && !UNITY_EDITOR
         [DllImport("__Internal")]
         private static extern void _sendMessage(string type, string message);
-
-        [DllImport("__Internal")]
-        private static extern void _openAuthPopup(string url);
 #else
         private static void _sendMessage(string type, string message)
         {
             Debug.Log($"[HApps][Editor] _sendMessage({type})");
-        }
-
-        private static void _openAuthPopup(string url)
-        {
-            Debug.Log($"[HApps][Editor] _openAuthPopup({url})");
         }
 #endif
 
@@ -138,12 +130,6 @@ namespace HAppsSDK
         {
             Debug.Log($"[HApps] → JS type={type}");
             _sendMessage(type, payloadJson);
-        }
-
-        public void OpenAuthPopup(string url)
-        {
-            Debug.Log("[HApps] Opening auth popup");
-            _openAuthPopup(url);
         }
 
         private static string TryParseType(string json)

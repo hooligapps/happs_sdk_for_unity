@@ -115,4 +115,10 @@ namespace HAppsSDK
     {
         public PaymentItem item;
     }
+
+    [Serializable]
+    public class AuthPopupRequest
+    {
+        public string url;
+    }
 }

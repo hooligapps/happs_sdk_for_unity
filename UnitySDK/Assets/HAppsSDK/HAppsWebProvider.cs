@@ -80,9 +80,11 @@ namespace HAppsSDK
                 Reset();
             }
 
+            var json = JsonUtility.ToJson(new AuthPopupRequest { url = url });
+
             return await StartOperation<string>(
                 OperationType.AuthTicket,
-                () => _bridge.OpenAuthPopup(url),
+                () => _bridge.SendToJS("openAuthPopup", json),
                 timeoutMs: null);
         }
 
