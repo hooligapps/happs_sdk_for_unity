@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
 
@@ -7,19 +8,22 @@ namespace HAppsSDK
 {
     public sealed class HAppsWebProvider : HAppsProvider
     {
+        public const string Version = "1.0.0";
+
         private enum OperationType
         {
             Init,
-            Profile,
-            Payment,
-            AuthTicket
+            GetProfile,
+            MakePayment,
+            OpenAuthPopup,
+            OpenPortalAuth,
         }
 
         private const int DEFAULT_TIMEOUT_MS = 30000;
 
         private readonly HAppsJSBridge _bridge;
 
-        private readonly Dictionary<OperationType, TaskCompletionSource<object>> _operations
+        private readonly Dictionary<OperationType, OperationBase> _operations
             = new();
 
         public HAppsWebProvider()
@@ -33,130 +37,119 @@ namespace HAppsSDK
             _bridge.OnProfile += HandleProfile;
             _bridge.OnPaymentCompleted += HandlePaymentCompleted;
             _bridge.OnAuthTicket += HandleAuthTicket;
-        }
+            _bridge.OnPortalAuthCompleted += HandlePortalAuthCompleted;
 
-        #region Public API
+            HAppsLog.Log("Provider created");
+        }
 
         public override Task<bool> Initialize()
         {
             return StartOperation<bool>(
                 OperationType.Init,
                 () => _bridge.SendMessage("init", "{}"),
-                allowRestart: false,
-                timeoutMs: DEFAULT_TIMEOUT_MS);
+                false,
+                DEFAULT_TIMEOUT_MS);
         }
 
-        public override Task<UserData> RequestProfile()
+        public override Task<UserData> GetProfile()
         {
             return StartOperation<UserData>(
-                OperationType.Profile,
-                () => _bridge.SendMessage("getProfile", "{}"),
-                allowRestart: true,
-                timeoutMs: DEFAULT_TIMEOUT_MS);
+                OperationType.GetProfile,
+                () => _bridge.SendMessage("get_profile", "{}"),
+                true,
+                DEFAULT_TIMEOUT_MS);
         }
 
-        public override Task<PaymentData> RequestPayment(PaymentItem item)
+        public override Task<PaymentData> MakePayment(string orderId)
         {
-            if (item == null)
-                throw new ArgumentNullException(nameof(item));
-
-            var json = JsonUtility.ToJson(new PaymentRequest { item = item });
+            var json = JsonUtility.ToJson(new PaymentRequest { orderId = orderId });
 
             return StartOperation<PaymentData>(
-                OperationType.Payment,
-                () => _bridge.SendMessage("makePayment", json),
-                allowRestart: false,
-                timeoutMs: DEFAULT_TIMEOUT_MS);
+                OperationType.MakePayment,
+                () => _bridge.SendMessage("open_payment", json),
+                false,
+                null);
         }
 
-        public override Task<string> OpenAuthPopup(string url)
+        public override Task<string> OpenIdpAuthPopup(string url)
         {
-#if UNITY_WEBGL && !UNITY_EDITOR
-            Action start = () => _bridge.OpenAuthPopup(url);
-#else
-            Action start = () => Application.OpenURL(url);
-#endif
+            var json = JsonUtility.ToJson(new OpenAuthPopupRequest { url = url });
 
             return StartOperation<string>(
-                OperationType.AuthTicket,
-                start,
-                allowRestart: true,
-                timeoutMs: null); // auth без таймаута
+                OperationType.OpenAuthPopup,
+                () => _bridge.SendMessage("popup_auth", json),
+                true,
+                null);
         }
 
-        #endregion
+        public override Task<bool> OpenPortalAuthPopup()
+        {
+            return StartOperation<bool>(
+                OperationType.OpenPortalAuth,
+                () => _bridge.SendMessage("portal_auth", "{}"),
+                true,
+                null);
+        }
 
-        #region Core Operation Logic
+        public override void Dispose()
+        {
+            HAppsLog.Log("Provider dispose");
 
-        private Task<T> StartOperation<T>(
-            OperationType type,
-            Action startAction,
-            bool allowRestart,
-            int? timeoutMs)
+            if (_bridge != null)
+            {
+                _bridge.OnInitialized -= HandleInitialized;
+                _bridge.OnProfile -= HandleProfile;
+                _bridge.OnPaymentCompleted -= HandlePaymentCompleted;
+                _bridge.OnAuthTicket -= HandleAuthTicket;
+                _bridge.OnPortalAuthCompleted -= HandlePortalAuthCompleted;
+            }
+
+            var ex = new ObjectDisposedException("HAppsSDK");
+
+            foreach (var op in _operations.Values)
+                op.Fail(ex);
+
+            _operations.Clear();
+        }
+
+        private Task<T> StartOperation<T>(OperationType type, Action startAction, bool allowRestart, int? timeoutMs)
         {
             if (_operations.TryGetValue(type, out var existing))
             {
                 if (!allowRestart)
-                    throw new InvalidOperationException($"{type} already in progress");
+                    throw new InvalidOperationException($"{type} already running");
 
-                existing.TrySetResult(default);
+                existing.Fail(new Exception("Operation restarted"));
                 _operations.Remove(type);
             }
 
-            Debug.Log($"[HApps] Starting {type}");
+            var op = new Operation<T>(timeoutMs);
 
-            var tcs = new TaskCompletionSource<object>(
-                TaskCreationOptions.RunContinuationsAsynchronously);
+            _operations[type] = op;
 
-            _operations[type] = tcs;
+            HAppsLog.Log($"Starting {type}");
 
             startAction?.Invoke();
 
-            return AwaitResult<T>(type, tcs, timeoutMs);
+            return op.Task;
         }
 
-        private async Task<T> AwaitResult<T>(
-            OperationType type,
-            TaskCompletionSource<object> tcs,
-            int? timeoutMs)
+        private void Complete<T>(OperationType type, T result)
         {
-            Task<object> task = tcs.Task;
-
-            if (timeoutMs.HasValue)
+            if (!_operations.Remove(type, out var opBase))
             {
-                var timeoutTask = Task.Delay(timeoutMs.Value);
-                var completed = await Task.WhenAny(task, timeoutTask);
-
-                if (completed == timeoutTask)
-                {
-                    _operations.Remove(type);
-                    throw new TimeoutException($"HApps {type} timeout");
-                }
+                HAppsLog.Warn($"No pending operation for {type}");
+                return;
             }
 
-            var result = await task;
-            return (T)result;
+            if (opBase is Operation<T> op)
+            {
+                HAppsLog.Log($"Completed {type}: {result}");
+                op.Complete(result);
+            }
         }
 
-        private void Complete(OperationType type, object result)
-        {
-            if (!_operations.TryGetValue(type, out var tcs))
-                return;
-
-            Debug.Log($"[HApps] Completed {type}: {result}");
-
-            tcs.TrySetResult(result);
-            _operations.Remove(type);
-        }
-
-        #endregion
-
-        #region JS Callbacks
-
-        private void HandleInitialized(
-            InitData init,
-            UserData user,
-            SignatureData signature)
+        private void HandleInitialized(InitData init, UserData user, SignatureData signature)
         {
             if (user != null)
             {
@@ -175,19 +168,33 @@ namespace HAppsSDK
             _userData = user;
             _loggedIn = user != null;
 
-            Complete(OperationType.Profile, user);
+            Complete(OperationType.GetProfile, user);
         }
 
         private void HandlePaymentCompleted(PaymentData data)
         {
-            Complete(OperationType.Payment, data);
+            Complete(OperationType.MakePayment, data);
         }
 
         private void HandleAuthTicket(string ticket)
         {
-            Complete(OperationType.AuthTicket, ticket);
+            Complete(OperationType.OpenAuthPopup, ticket);
         }
 
-        #endregion
+        private void HandlePortalAuthCompleted(UserData user, SignatureData signature)
+        {
+            if (user != null)
+            {
+                _userData = user;
+                _loggedIn = true;
+            }
+
+            var sig = signature?.signature ?? "";
+
+            if (!string.IsNullOrEmpty(sig))
+                Signature = sig;
+
+            Complete(OperationType.OpenPortalAuth, !string.IsNullOrEmpty(sig));
+        }
     }
 }

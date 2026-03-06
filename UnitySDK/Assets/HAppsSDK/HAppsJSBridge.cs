@@ -11,10 +11,17 @@ namespace HAppsSDK
         public event Action<PaymentData> OnPaymentCreated;
         public event Action<PaymentData> OnPaymentCompleted;
         public event Action<string> OnAuthTicket;
+        public event Action<UserData, SignatureData> OnPortalAuthCompleted;
 
-        public void OnHooligappsMessage(string json)
+        public void OnMessage(string json)
         {
-            Debug.Log($"[HApps] JS → {json}");
+            HAppsLog.Log($"JS → {json}");
+
+            if (string.IsNullOrEmpty(json))
+            {
+                HAppsLog.Warn("Empty JS message");
+                return;
+            }
 
             HAppsMessage msg;
 
@@ -24,12 +31,17 @@ namespace HAppsSDK
             }
             catch (Exception e)
             {
-                Debug.LogError($"[HApps] JSON parse error: {e}");
+                HAppsLog.Error($"JSON parse error: {e}");
                 return;
             }
 
             if (msg == null || string.IsNullOrEmpty(msg.type))
+            {
+                HAppsLog.Warn("Invalid JS message");
                 return;
+            }
+
+            HAppsLog.Log($"Dispatch: {msg.type}");
 
             switch (msg.type)
             {
@@ -45,12 +57,20 @@ namespace HAppsSDK
                     OnPaymentCreated?.Invoke(msg.paymentData);
                     break;
 
-                case "paymentComplete":
+                case "payment_complete":
                     OnPaymentCompleted?.Invoke(msg.paymentData);
                     break;
-                
-                case "authTicket":
+
+                case "auth_ticket":
                     OnAuthTicket?.Invoke(msg.authTicket);
+                    break;
+
+                case "auth_complete":
+                    OnPortalAuthCompleted?.Invoke(msg.userData, msg.signatureData);
+                    break;
+
+                default:
+                    HAppsLog.Warn($"Unknown message type: {msg.type}");
                     break;
             }
         }
@@ -58,24 +78,25 @@ namespace HAppsSDK
 #if UNITY_WEBGL && !UNITY_EDITOR
         [DllImport("__Internal")]
         private static extern void _sendMessage(string type, string message);
-
-        [DllImport("__Internal")]
-        private static extern void _openAuthPopup(string url);
 #else
         private static void _sendMessage(string type, string message) { }
-        private static void _openAuthPopup(string url) { }
 #endif
 
         public void SendMessage(string type, string payloadJson)
         {
-            Debug.Log($"HAppsJSBridge.SendMessage {type} {payloadJson}");
+            HAppsLog.Log($"Unity → JS: {type} {payloadJson}");
             _sendMessage(type, payloadJson);
         }
-
-        public void OpenAuthPopup(string url)
+        
+        public void RunNextFrame(Action action)
         {
-            Debug.Log($"HAppsJSBridge.OpenAuthPopup {url}");
-            _openAuthPopup(url);
+            StartCoroutine(RunNextFrameRoutine(action));
+        }
+        
+        private System.Collections.IEnumerator RunNextFrameRoutine(Action action)
+        {
+            yield return null;
+            action?.Invoke();
         }
     }
 }

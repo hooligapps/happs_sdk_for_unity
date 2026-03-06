@@ -12,13 +12,24 @@ namespace HAppsSDK
 		public static Task<bool> Initialize()
 			=> Provider.Initialize();
 
-		public static Task<UserData> RequestProfile()
-			=> Provider.RequestProfile();
+		public static Task<UserData> GetProfile()
+			=> Provider.GetProfile();
 
-		public static Task<PaymentData> RequestPayment(PaymentItem item)
-			=> Provider.RequestPayment(item);
+		public static Task<PaymentData> MakePayment(string orderId)
+			=> Provider.MakePayment(orderId);
 
-		public static Task<string> OpenAuthPopup(string url)
-			=> Provider.OpenAuthPopup(url);
+		public static Task<string> OpenIdpAuthPopup(string url)
+			=> Provider.OpenIdpAuthPopup(url);
+
+		public static Task<bool> OpenPortalAuthPopup()
+			=> Provider.OpenPortalAuthPopup();
+
+		public static void Shutdown()
+		{
+			HAppsLog.Log("Shutdown");
+
+			_provider?.Dispose();
+			_provider = null;
+		}
 	}
 }
