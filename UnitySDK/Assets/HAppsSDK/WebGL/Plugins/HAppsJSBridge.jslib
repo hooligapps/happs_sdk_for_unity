@@ -17,7 +17,10 @@ mergeInto(LibraryManager.library, {
         if (typeof window.HApps === "undefined")
             return 0;
 
-        return window.HApps.isPortal ? 1 : 0;
+        if (typeof window.HApps.isPortal !== "function")
+            return 0;
+
+        return window.HApps.isPortal() ? 1 : 0;
     },
     
     _redirect: function (urlPtr) {
