@@ -24,6 +24,9 @@ namespace HAppsSDK
 		public static Task<bool> OpenPortalAuthPopup()
 			=> Provider.OpenPortalAuthPopup();
 
+		public static bool IsPortalSite()
+			=> Provider.IsPortalSite();
+
 		public static void Shutdown()
 		{
 			HAppsLog.Log("Shutdown");

@@ -20,6 +20,8 @@ namespace HAppsSDK
 		public abstract Task<PaymentData> MakePayment(string orderId);
 		public abstract Task<string> OpenIdpAuthPopup(string url);
 		public abstract Task<bool> OpenPortalAuthPopup();
+		
+		public virtual bool IsPortalSite() => false;
 
 		public virtual void Dispose() { }
     }
@@ -41,6 +43,7 @@ namespace HAppsSDK
 	{
 		public string userId;
 		public string userName;
+		public bool verified;
 
 		public override string ToString()
 		{

@@ -78,8 +78,14 @@ namespace HAppsSDK
 #if UNITY_WEBGL && !UNITY_EDITOR
         [DllImport("__Internal")]
         private static extern void _sendMessage(string type, string message);
+        [DllImport("__Internal")]
+        private static extern int _isPortalSite();
+        [DllImport("__Internal")]
+        private static extern void _redirect(string url);
 #else
         private static void _sendMessage(string type, string message) { }
+        private static int _isPortalSite() { return 0; }
+        private static void _redirect(string url) { }
 #endif
 
         public void SendMessage(string type, string payloadJson)
@@ -97,6 +103,24 @@ namespace HAppsSDK
         {
             yield return null;
             action?.Invoke();
+        }
+        
+        public static bool IsPortalSite()
+        {
+#if UNITY_WEBGL && !UNITY_EDITOR
+            return _isPortalSite() == 1;
+#else
+            return false;
+#endif
+        }
+        
+        public static void Redirect(string url)
+        {
+#if UNITY_WEBGL && !UNITY_EDITOR
+            _redirect(url);
+#else
+            Application.OpenURL(url);
+#endif
         }
     }
 }

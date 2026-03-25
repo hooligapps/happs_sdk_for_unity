@@ -112,6 +112,11 @@ namespace HAppsSDK
             _operations.Clear();
         }
 
+        public override bool IsPortalSite()
+        {
+            return HAppsJSBridge.IsPortalSite();
+        }
+
         private Task<T> StartOperation<T>(OperationType type, Action startAction, bool allowRestart, int? timeoutMs)
         {
             if (_operations.TryGetValue(type, out var existing))

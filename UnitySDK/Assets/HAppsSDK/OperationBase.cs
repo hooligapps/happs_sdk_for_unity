@@ -13,6 +13,7 @@ namespace HAppsSDK
 	{
 		private readonly TaskCompletionSource<T> _tcs;
 		private readonly CancellationTokenSource _timeoutCts;
+		private readonly CancellationTokenRegistration _timeoutRegistration;
 
 		public Operation(int? timeoutMs)
 		{
@@ -22,7 +23,7 @@ namespace HAppsSDK
 			if (timeoutMs.HasValue)
 			{
 				_timeoutCts = new CancellationTokenSource(timeoutMs.Value);
-				_timeoutCts.Token.Register(OnTimeout);
+				_timeoutRegistration = _timeoutCts.Token.Register(OnTimeout);
 			}
 		}
 
@@ -30,12 +31,15 @@ namespace HAppsSDK
 
 		private void OnTimeout()
 		{
+			if (_tcs.Task.IsCompleted)
+				return;
+
 			_tcs.TrySetException(new TimeoutException("Operation timeout"));
 		}
 
 		public void Complete(T result)
 		{
-			_timeoutCts?.Cancel();
+			_timeoutRegistration.Dispose();
 			_timeoutCts?.Dispose();
 
 			_tcs.TrySetResult(result);
@@ -43,7 +47,7 @@ namespace HAppsSDK
 
 		public override void Fail(Exception e)
 		{
-			_timeoutCts?.Cancel();
+			_timeoutRegistration.Dispose();
 			_timeoutCts?.Dispose();
 
 			_tcs.TrySetException(e);

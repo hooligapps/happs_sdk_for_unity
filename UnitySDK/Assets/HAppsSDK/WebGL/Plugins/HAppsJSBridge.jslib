@@ -10,5 +10,21 @@ mergeInto(LibraryManager.library, {
         }
 
         window.HApps.onUnityEvent(jsType, jsMessage);
+    },
+    
+    _isPortalSite: function () {
+    
+        if (typeof window.HApps === "undefined")
+            return 0;
+
+        if (typeof window.HApps.getUser !== "function")
+            return 0;
+
+        return window.HApps.getUser() == null ? 0 : 1;
+    },
+    
+    _redirect: function (urlPtr) {
+        var url = UTF8ToString(urlPtr);
+        window.location.href = url;
     }
 });
