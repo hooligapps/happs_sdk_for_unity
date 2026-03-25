@@ -131,12 +131,28 @@ namespace HAppsSDK
             var op = new Operation<T>(timeoutMs);
 
             _operations[type] = op;
+            op.UntypedTask.ContinueWith(_ => CleanupFailedOperation(type, op),
+                TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously);
 
             HAppsLog.Log($"Starting {type}");
 
-            startAction?.Invoke();
+            try
+            {
+                startAction?.Invoke();
+            }
+            catch (Exception ex)
+            {
+                CleanupFailedOperation(type, op);
+                op.Fail(ex);
+            }
 
             return op.Task;
+        }
+
+        private void CleanupFailedOperation(OperationType type, OperationBase operation)
+        {
+            if (_operations.TryGetValue(type, out var current) && ReferenceEquals(current, operation))
+                _operations.Remove(type);
         }
 
         private void Complete<T>(OperationType type, T result)

@@ -6,6 +6,7 @@ namespace HAppsSDK
 {
 	internal abstract class OperationBase
 	{
+		public abstract Task UntypedTask { get; }
 		public abstract void Fail(Exception e);
 	}
 	
@@ -28,6 +29,7 @@ namespace HAppsSDK
 		}
 
 		public Task<T> Task => _tcs.Task;
+		public override Task UntypedTask => _tcs.Task;
 
 		private void OnTimeout()
 		{
