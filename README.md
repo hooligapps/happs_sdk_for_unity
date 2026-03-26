@@ -2,6 +2,22 @@
 
 Unity SDK for HApps WebGL integrations.
 
+## Installation
+
+Add the package to your Unity project through `Packages/manifest.json`:
+
+```json
+{
+  "dependencies": {
+    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v1.0.0"
+  }
+}
+```
+
+The SDK is distributed as a Unity package from:
+
+- `UnitySDK/Packages/com.happs.sdk`
+
 This SDK supports two distinct integration modes:
 
 1. Standalone WebGL auth via backend IDP popup
