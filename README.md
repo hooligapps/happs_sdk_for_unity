@@ -31,8 +31,6 @@ Method semantics:
 - `IsPortalSite()` reflects `window.HApps.isPortal()` from the JS environment.
 - `Shutdown()` disposes the current provider instance.
 
-`HApps.Provider` is public in code, but integrators should treat the `HApps` static methods above as the primary API.
-
 ## Choose Your Flow
 
 Use standalone flow when:
@@ -51,7 +49,7 @@ Use embedded portal flow when:
 
 This flow does not require calling `await HApps.Initialize()` from Unity C#.
 
-If your build uses the browser SDK bridge for shared functionality, payments, or common environment setup, your WebGL template may still call `HApps.init(...)` in JavaScript.
+Your WebGL template still needs to load and initialize the browser bridge script so Unity can communicate with the page environment.
 
 ### Unity Example
 
@@ -74,14 +72,13 @@ if (!string.IsNullOrEmpty(ticket))
 ### Standalone WebGL Template Example
 
 ```html
-<script src="TemplateData/webgl_check.js"></script>
 <script src="https://hooli.games/public/js/sdk/hooligapps.debug.js"></script>
 ```
 
 ```javascript
 function initHApps(unityInstance) {
     const BACKEND_HOST = "https://your-backend.example/api";
-    const PLATFORM_ORIGIN = "https://portal.example";
+    const PLATFORM_ORIGIN = "https://portal.example.com";
 
     if (typeof HApps === "undefined") {
         console.error("HApps SDK is not defined. Check script includes.");
@@ -90,7 +87,7 @@ function initHApps(unityInstance) {
 
     const result = HApps.init({
         platformOrigin: PLATFORM_ORIGIN,
-        ssoLoginUrl: BACKEND_HOST + "/hooli/sign",
+        ssoLoginUrl: BACKEND_HOST + "/sign",
         unityObjectName: "HAppsJSBridge",
         unityMethodName: "OnMessage",
         gameInstance: unityInstance,
@@ -109,6 +106,11 @@ createUnityInstance(canvas, config, onProgress).then((unityInstance) => {
 });
 ```
 
+Required bridge config for Unity:
+
+- `unityObjectName: "HAppsJSBridge"`
+- `unityMethodName: "OnMessage"`
+
 ### Backend Requirements
 
 Required endpoints:
@@ -120,15 +122,10 @@ Required endpoints:
 Backend must:
 
 1. Generate OIDC URL with PKCE, state, and nonce.
-2. Store auth state in Redis with short TTL.
+2. Store auth state server-side with short TTL.
 3. Redirect user to the identity provider.
 4. On callback, validate state, exchange code, load user info, and issue a short-lived auth ticket.
 5. On `/finish`, consume the ticket exactly once and issue the real auth token.
-
-Suggested Redis keys:
-
-- `auth_state:{state}`
-- `auth_ticket:{ticket}`
 
 ## Embedded Portal Flow
 
@@ -136,34 +133,23 @@ This flow requires platform JS and SDK initialization.
 
 ### WebGL Template Setup
 
-Your `index.html` must include the platform script:
+Load one of the HApps browser SDK scripts in the page and initialize it with `HApps.init(...)`.
+
+Choose one script variant:
 
 ```html
-<script src="hooligapps.js"></script>
-<script>
-    HooligappsIntegration.init({
-        platformOrigin: "https://portal.domain",
-        unityObjectName: "HAppsJSBridge",
-        unityMethodName: "OnHooligappsMessage"
-    });
-</script>
-```
+<!-- Development -->
+<script src="https://hooli.games/public/js/sdk/hooligapps.debug.js"></script>
 
-After Unity is created:
-
-```javascript
-createUnityInstance(canvas, config).then(instance => {
-    window.unityInstance = instance;
-    HooligappsIntegration.setUnityInstance(instance);
-});
+<!-- Production -->
+<!-- <script src="https://hooli.games/public/js/sdk/hooligapps.js"></script> -->
 ```
 
 ### Portal WebGL Template Example
 
-If you are using the HApps browser SDK directly in the page, the portal template can be initialized like this:
+Example portal page setup:
 
 ```html
-<script src="TemplateData/webgl_check.js"></script>
 <script src="https://hooli.games/public/js/sdk/hooligapps.debug.js"></script>
 ```
 
@@ -179,7 +165,7 @@ function initHApps(unityInstance) {
 
     const result = HApps.init({
         platformOrigin: PLATFORM_ORIGIN,
-        ssoLoginUrl: BACKEND_HOST + "/hooli/sign",
+        ssoLoginUrl: BACKEND_HOST + "/sign",
         unityObjectName: "HAppsJSBridge",
         unityMethodName: "OnMessage",
         gameInstance: unityInstance,
@@ -198,41 +184,43 @@ createUnityInstance(canvas, config, onProgress).then((unityInstance) => {
 });
 ```
 
-### Browser SDK Script Variants
+Required bridge config for Unity:
 
-Two browser SDK builds are available:
+- `unityObjectName: "HAppsJSBridge"`
+- `unityMethodName: "OnMessage"`
 
-- `https://hooli.games/public/js/sdk/hooligapps.debug.js` for development and integration debugging
-- `https://hooli.games/public/js/sdk/hooligapps.js` for production use
+Minimal `HApps.init(...)` config:
 
-Example:
+- `platformOrigin`
+- `ssoLoginUrl`
+- `gameInstance`
 
-```html
-<!-- Development -->
-<script src="https://hooli.games/public/js/sdk/hooligapps.debug.js"></script>
+Optional config:
 
-<!-- Production -->
-<!-- <script src="https://hooli.games/public/js/sdk/hooligapps.js"></script> -->
-```
+- `maxRetries`
+- `retryDelayMs`
 
 ### Recommended Unity Flow
 
 ```csharp
 if (!HApps.IsPortalSite())
 {
-    throw new Exception("Embedded flow requires portal environment");
+    // Use your own fallback or error handling here.
+    return;
 }
 
 var initialized = await HApps.Initialize();
 if (!initialized)
 {
-    throw new Exception("HApps initialization failed");
+    // Handle initialization failure.
+    return;
 }
 
 var authOk = await HApps.OpenPortalAuthPopup();
 if (!authOk)
 {
-    throw new Exception("Portal auth failed");
+    // Handle auth failure.
+    return;
 }
 
 var profile = await HApps.GetProfile();
@@ -299,7 +287,7 @@ if (payment.IsSuccess)
 
 Important points:
 
-- `orderId` must already exist in your backend/business system.
+- `orderId` must already be created by your backend/business layer.
 - `MakePayment()` does not build an order for you.
 - client-side payment success is not enough to grant rewards
 - backend verification is mandatory
@@ -331,11 +319,10 @@ Example shape:
 
 ## Known Caveats
 
-- `HApps.Provider` is public, but direct provider access should be treated as internal unless you intentionally depend on SDK internals.
 - `IsPortalSite()` depends on the JS contract `window.HApps.isPortal()`.
 - `MakePayment()` accepts `orderId`, not `PaymentItem`.
 - `Initialize()` and `GetProfile()` may fail if the JS bridge is not correctly wired in the WebGL template.
-- `HApps.init(...)` in the page template and `HApps.Initialize()` in Unity are different steps. The first bootstraps the browser-side SDK, the second waits for the Unity-side embedded init flow.
+- `HApps.init(...)` in the page template and `HApps.Initialize()` in Unity are different steps. The first bootstraps the browser bridge, the second waits for the Unity-side embedded init flow.
 
 ## Security Requirements
 
@@ -343,7 +330,6 @@ Example shape:
 - Never use `"*"` in `postMessage`.
 - Use PKCE for OIDC.
 - Validate `state` and `nonce`.
-- Use short Redis TTL.
 - Tickets must be single-use.
 - Never trust client payment result.
 - Always verify payment server-side.
