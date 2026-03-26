@@ -1,0 +1,10 @@
+{
+  "name": "com.happs.sdk",
+  "displayName": "HApps Unity SDK",
+  "version": "1.0.0",
+  "unity": "6000.0",
+  "description": "Unity SDK for HApps WebGL integrations.",
+  "author": {
+    "name": "HApps"
+  }
+}

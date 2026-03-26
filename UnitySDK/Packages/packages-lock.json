@@ -1,5 +1,11 @@
 {
   "dependencies": {
+    "com.happs.sdk": {
+      "version": "file:com.happs.sdk",
+      "depth": 0,
+      "source": "embedded",
+      "dependencies": {}
+    },
     "com.unity.2d.animation": {
       "version": "13.0.4",
       "depth": 0,

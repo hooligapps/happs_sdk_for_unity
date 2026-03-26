@@ -116,29 +116,6 @@ namespace HAppsSDK
 		}
 	}
 
-	// [Serializable]
-	// public class PaymentItem
-	// {
-	// 	public string itemId;
-	// 	public string itemName;
-	// 	public string description;
-	// 	public string imageUrl;
-	//
-	// 	public int quantity;
-	// 	public float price;
-	//
-	// 	public PaymentItem()
-	// 	{
-	// 	}
-	//
-	// 	public PaymentItem(string itemId, int quantity, float price)
-	// 	{
-	// 		this.itemId = itemId;
-	// 		this.quantity = quantity;
-	// 		this.price = price;
-	// 	}
-	// }
-
 	[Serializable]
 	public class PaymentRequest
 	{
