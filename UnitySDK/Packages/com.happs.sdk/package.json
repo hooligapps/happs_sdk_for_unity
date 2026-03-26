@@ -4,6 +4,12 @@
   "version": "1.0.0",
   "unity": "6000.0",
   "description": "Unity SDK for HApps WebGL integrations.",
+  "documentationUrl": "https://github.com/hooligapps/happs_sdk_for_unity/tree/main/UnitySDK/Packages/com.happs.sdk",
+  "changelogUrl": "https://github.com/hooligapps/happs_sdk_for_unity/blob/main/UnitySDK/Packages/com.happs.sdk/CHANGELOG.md",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hooligapps/happs_sdk_for_unity.git"
+  },
   "author": {
     "name": "HApps"
   }

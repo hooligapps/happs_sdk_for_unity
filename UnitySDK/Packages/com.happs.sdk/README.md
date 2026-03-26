@@ -2,6 +2,20 @@
 
 Unity package for HApps WebGL integrations.
 
+## Installation
+
+Add the package to your Unity project through `Packages/manifest.json`:
+
+```json
+{
+  "dependencies": {
+    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v1.0.0"
+  }
+}
+```
+
+Use a release tag such as `v1.0.0`. During development you can temporarily point to a commit hash instead of a tag.
+
 ## Runtime API
 
 ```csharp
