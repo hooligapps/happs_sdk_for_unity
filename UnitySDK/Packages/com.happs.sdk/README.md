@@ -9,12 +9,12 @@ Add the package to your Unity project through `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v2.0.0"
+    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v2.0.1"
   }
 }
 ```
 
-Use a release tag such as `v2.0.0`. During development you can temporarily point to a commit hash instead of a tag.
+Use a release tag such as `v2.0.1`. During development you can temporarily point to a commit hash instead of a tag.
 
 ## Runtime API
 
