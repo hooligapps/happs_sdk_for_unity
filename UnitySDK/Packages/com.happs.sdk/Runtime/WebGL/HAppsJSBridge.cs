@@ -61,7 +61,7 @@ namespace HAppsSDK
                     OnPaymentCompleted?.Invoke(msg.paymentData);
                     break;
 
-                case "auth_ticket":
+                case "popup_auth_result":
                     OnAuthPopupCompleted?.Invoke(msg.authPopupData);
                     break;
 
