@@ -18,7 +18,7 @@ namespace HAppsSDK
 		public abstract Task<bool> Initialize();
 		public abstract Task<UserData> GetProfile();
 		public abstract Task<PaymentData> MakePayment(string orderId);
-		public abstract Task<string> OpenIdpAuthPopup(string url);
+		public abstract Task<AuthPopupData> OpenIdpAuthPopup(string url);
 		public abstract Task<bool> OpenPortalAuthPopup();
 		
 		public virtual bool IsPortalSite() => false;
@@ -35,7 +35,7 @@ namespace HAppsSDK
 		public UserData userData;
 		public SignatureData signatureData;
 		public PaymentData paymentData;
-		public string authTicket;
+		public AuthPopupData authPopupData;
 	}
 
 	[Serializable]
@@ -65,6 +65,38 @@ namespace HAppsSDK
 		public bool isMobileWeb;
 	}
 
+	[Serializable]
+	public class AuthPopupData
+	{
+		public string flow;
+		public string ticket;
+
+		public AuthPopupFlow Flow
+		{
+			get
+			{
+				if (string.IsNullOrEmpty(flow))
+					return AuthPopupFlow.Unknown;
+
+				return flow switch
+				{
+					"cookie" => AuthPopupFlow.Cookie,
+					"ticket" => AuthPopupFlow.Ticket,
+					"cancelled" => AuthPopupFlow.Cancelled,
+					_ => AuthPopupFlow.Unknown
+				};
+			}
+		}
+	}
+
+	public enum AuthPopupFlow
+	{
+		Unknown,
+		Cookie,
+		Ticket,
+		Cancelled,
+	}
+
 	public enum PaymentStatus
 	{
 		Unknown,
@@ -90,16 +122,15 @@ namespace HAppsSDK
 				if (string.IsNullOrEmpty(status))
 					return PaymentStatus.Unknown;
 
-				switch (status.ToLowerInvariant())
+				return status.ToLowerInvariant() switch
 				{
-					case "started": return PaymentStatus.Started;
-					case "succeeded": return PaymentStatus.Succeeded;
-					case "fail": return PaymentStatus.Fail;
-					case "cancelled": return PaymentStatus.Cancelled;
-					case "insufficient_funds": return PaymentStatus.InsufficientFunds;
-					
-					default: return PaymentStatus.Unknown;
-				}
+					"started" => PaymentStatus.Started,
+					"succeeded" => PaymentStatus.Succeeded,
+					"fail" => PaymentStatus.Fail,
+					"cancelled" => PaymentStatus.Cancelled,
+					"insufficient_funds" => PaymentStatus.InsufficientFunds,
+					_ => PaymentStatus.Unknown
+				};
 			}
 		}
 

@@ -22,7 +22,7 @@ Use a release tag such as `v1.0.0`. During development you can temporarily point
 Task<bool> HApps.Initialize()
 Task<UserData> HApps.GetProfile()
 Task<PaymentData> HApps.MakePayment(string orderId)
-Task<string> HApps.OpenIdpAuthPopup(string url)
+Task<AuthPopupData> HApps.OpenIdpAuthPopup(string url)
 Task<bool> HApps.OpenPortalAuthPopup()
 bool HApps.IsPortalSite()
 void HApps.Shutdown()
@@ -42,7 +42,10 @@ Your WebGL page must:
 Standalone flow:
 
 - use `OpenIdpAuthPopup(url)`
-- exchange returned ticket on your backend
+- inspect returned `AuthPopupData`
+- popup auth supports two success modes:
+- `ticket`: exchange `ticket` on your backend
+- `cookie`: auth is already completed through cookie session
 
 Embedded portal flow:
 
@@ -54,4 +57,6 @@ Embedded portal flow:
 
 - `IsPortalSite()` depends on `window.HApps.isPortal()`
 - `MakePayment()` accepts backend-created `orderId`
+- `OpenIdpAuthPopup(url)` returns `AuthPopupData`, not plain `string`
+- `AuthPopupData` supports both ticket-based and cookie-based session auth
 - sample scene/scripts remain in the host project, not in the package

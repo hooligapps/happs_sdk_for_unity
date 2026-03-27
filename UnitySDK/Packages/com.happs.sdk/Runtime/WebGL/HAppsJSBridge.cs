@@ -10,7 +10,7 @@ namespace HAppsSDK
         public event Action<UserData> OnProfile;
         public event Action<PaymentData> OnPaymentCreated;
         public event Action<PaymentData> OnPaymentCompleted;
-        public event Action<string> OnAuthTicket;
+        public event Action<AuthPopupData> OnAuthPopupCompleted;
         public event Action<UserData, SignatureData> OnPortalAuthCompleted;
 
         public void OnMessage(string json)
@@ -62,7 +62,7 @@ namespace HAppsSDK
                     break;
 
                 case "auth_ticket":
-                    OnAuthTicket?.Invoke(msg.authTicket);
+                    OnAuthPopupCompleted?.Invoke(msg.authPopupData);
                     break;
 
                 case "auth_complete":

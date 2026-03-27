@@ -31,7 +31,7 @@ The supported integration surface is the static `HApps` facade:
 Task<bool> HApps.Initialize()
 Task<UserData> HApps.GetProfile()
 Task<PaymentData> HApps.MakePayment(string orderId)
-Task<string> HApps.OpenIdpAuthPopup(string url)
+Task<AuthPopupData> HApps.OpenIdpAuthPopup(string url)
 Task<bool> HApps.OpenPortalAuthPopup()
 bool HApps.IsPortalSite()
 void HApps.Shutdown()
@@ -42,7 +42,7 @@ Method semantics:
 - `Initialize()` prepares embedded portal integration and waits for the platform init response.
 - `GetProfile()` requests the current user profile from the platform.
 - `MakePayment(orderId)` starts a payment flow for an already created backend order.
-- `OpenIdpAuthPopup(url)` opens standalone backend auth popup and returns a short-lived auth ticket.
+- `OpenIdpAuthPopup(url)` opens standalone backend auth popup and returns `AuthPopupData` for either ticket-based or cookie-based session auth.
 - `OpenPortalAuthPopup()` starts portal-managed auth and returns `true` when portal auth completes successfully.
 - `IsPortalSite()` reflects `window.HApps.isPortal()` from the JS environment.
 - `Shutdown()` disposes the current provider instance.
@@ -71,19 +71,33 @@ Your WebGL template still needs to load and initialize the browser bridge script
 
 ```csharp
 var url = $"{serverUrl}/api/auth/idp?token={launchToken}";
-var ticket = await HApps.OpenIdpAuthPopup(url);
+var authPopupData = await HApps.OpenIdpAuthPopup(url);
 
-if (!string.IsNullOrEmpty(ticket))
+switch (authPopupData.Flow)
 {
-    await Gateway.Post("/api/auth/idp/finish", new { ticket });
+    case AuthPopupFlow.Ticket:
+        if (!string.IsNullOrEmpty(authPopupData.ticket))
+        {
+            await Gateway.Post("/api/auth/idp/finish", new { ticket = authPopupData.ticket });
+        }
+        break;
+
+    case AuthPopupFlow.Cookie:
+        // Auth already completed through cookie session.
+        break;
+
+    case AuthPopupFlow.Cancelled:
+        return;
 }
 ```
 
 ### Expected Result
 
 - the popup authenticates the user via your backend
-- Unity receives an auth ticket
-- your backend exchanges that ticket for the real auth/session token
+- Unity receives `AuthPopupData`
+- popup auth supports two success modes:
+- `ticket`: your backend exchanges `ticket` for the real auth/session token
+- `cookie`: auth is already completed through cookie session without a ticket roundtrip
 
 ### Standalone WebGL Template Example
 
@@ -258,8 +272,10 @@ The SDK exposes two different auth entrypoints because the ownership of auth is 
 Use this when auth is handled by your backend.
 
 - input: backend-generated auth URL
-- result: auth ticket string
-- follow-up: your backend exchanges the ticket for the real session token
+- result: `AuthPopupData`
+- popup auth supports two success modes:
+- `ticket`: your backend exchanges the ticket for the real session token
+- `cookie`: auth is already completed through cookie session
 
 ### `OpenPortalAuthPopup()`
 
@@ -287,6 +303,27 @@ if (profile != null)
 - `userId`
 - `userName`
 - `verified`
+
+## AuthPopupData
+
+`OpenIdpAuthPopup(url)` returns `AuthPopupData`:
+
+- `flow`
+- `ticket`
+
+Supported `flow` values:
+
+- `ticket`
+- `cookie`
+- `cancelled`
+
+Use `authPopupData.Flow` in Unity code:
+
+- `ticket` means ticket-based session flow
+- `cookie` means cookie-based session flow
+- `cancelled` means the popup flow did not complete successfully
+
+Read `authPopupData.ticket` only when the flow requires it.
 
 ## Payments
 

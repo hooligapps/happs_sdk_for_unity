@@ -18,7 +18,7 @@ namespace HAppsSDK
 		public static Task<PaymentData> MakePayment(string orderId)
 			=> Provider.MakePayment(orderId);
 
-		public static Task<string> OpenIdpAuthPopup(string url)
+		public static Task<AuthPopupData> OpenIdpAuthPopup(string url)
 			=> Provider.OpenIdpAuthPopup(url);
 
 		public static Task<bool> OpenPortalAuthPopup()

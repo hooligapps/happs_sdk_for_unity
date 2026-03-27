@@ -36,7 +36,7 @@ namespace HAppsSDK
             _bridge.OnInitialized += HandleInitialized;
             _bridge.OnProfile += HandleProfile;
             _bridge.OnPaymentCompleted += HandlePaymentCompleted;
-            _bridge.OnAuthTicket += HandleAuthTicket;
+            _bridge.OnAuthPopupCompleted += HandleAuthPopupCompleted;
             _bridge.OnPortalAuthCompleted += HandlePortalAuthCompleted;
 
             HAppsLog.Log("Provider created");
@@ -71,11 +71,11 @@ namespace HAppsSDK
                 null);
         }
 
-        public override Task<string> OpenIdpAuthPopup(string url)
+        public override Task<AuthPopupData> OpenIdpAuthPopup(string url)
         {
             var json = JsonUtility.ToJson(new OpenAuthPopupRequest { url = url });
 
-            return StartOperation<string>(
+            return StartOperation<AuthPopupData>(
                 OperationType.OpenAuthPopup,
                 () => _bridge.SendMessage("popup_auth", json),
                 true,
@@ -100,7 +100,7 @@ namespace HAppsSDK
                 _bridge.OnInitialized -= HandleInitialized;
                 _bridge.OnProfile -= HandleProfile;
                 _bridge.OnPaymentCompleted -= HandlePaymentCompleted;
-                _bridge.OnAuthTicket -= HandleAuthTicket;
+                _bridge.OnAuthPopupCompleted -= HandleAuthPopupCompleted;
                 _bridge.OnPortalAuthCompleted -= HandlePortalAuthCompleted;
             }
 
@@ -197,9 +197,9 @@ namespace HAppsSDK
             Complete(OperationType.MakePayment, data);
         }
 
-        private void HandleAuthTicket(string ticket)
+        private void HandleAuthPopupCompleted(AuthPopupData authPopupData)
         {
-            Complete(OperationType.OpenAuthPopup, ticket);
+            Complete(OperationType.OpenAuthPopup, authPopupData);
         }
 
         private void HandlePortalAuthCompleted(UserData user, SignatureData signature)

@@ -61,9 +61,9 @@ public sealed class HAppsSample : MonoBehaviour
         try
         {
             var url = BuildIdpUrl(serverUrl, launchToken);
-            var ticket = await HApps.OpenIdpAuthPopup(url);
+            var data = await HApps.OpenIdpAuthPopup(url);
 
-            LogStatus($"IDP ticket: {ticket}");
+            LogStatus($"IDP data: {data.flow} {data.ticket}");
         }
         catch (Exception ex)
         {
