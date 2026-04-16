@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.0.3
+
+- Rename Unity-side initialization flow to `Connect()`
+- Clarify portal auth flow and signature-based backend auth in documentation
+
 ## 1.0.0
 
 - Initial embedded Unity package version of HApps SDK

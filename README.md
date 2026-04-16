@@ -9,7 +9,7 @@ Add the package to your Unity project through `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v2.0.2"
+    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v2.0.3"
   }
 }
 ```
@@ -28,7 +28,7 @@ This SDK supports two distinct integration modes:
 The supported integration surface is the static `HApps` facade:
 
 ```csharp
-Task<bool> HApps.Initialize()
+Task<bool> HApps.Connect()
 Task<UserData> HApps.GetProfile()
 Task<PaymentData> HApps.MakePayment(string orderId)
 Task<AuthPopupData> HApps.OpenIdpAuthPopup(string url)
@@ -39,11 +39,11 @@ void HApps.Shutdown()
 
 Method semantics:
 
-- `Initialize()` prepares embedded portal integration and waits for the platform init response.
+- `Connect()` requests platform data through the initialized browser bridge, stores portal signature on the provider, and waits for the platform connect response.
 - `GetProfile()` requests the current user profile from the platform.
 - `MakePayment(orderId)` starts a payment flow for an already created backend order.
 - `OpenIdpAuthPopup(url)` opens standalone backend auth popup and returns `AuthPopupData` for either ticket-based or cookie-based session auth.
-- `OpenPortalAuthPopup()` starts portal-managed auth and returns `true` when portal auth completes successfully.
+- `OpenPortalAuthPopup()` opens portal-managed auth UI and returns `true` when portal auth completes successfully.
 - `IsPortalSite()` reflects `window.HApps.isPortal()` from the JS environment.
 - `Shutdown()` disposes the current provider instance.
 
@@ -63,7 +63,7 @@ Use embedded portal flow when:
 
 ## Standalone Flow
 
-This flow does not require calling `await HApps.Initialize()` from Unity C#.
+This flow does not require calling `await HApps.Connect()` from Unity C#.
 
 Your WebGL template still needs to load and initialize the browser bridge script so Unity can communicate with the page environment.
 
@@ -159,7 +159,7 @@ Backend must:
 
 ## Embedded Portal Flow
 
-This flow requires platform JS and SDK initialization.
+This flow requires platform JS bootstrap and Unity-side connection.
 
 ### WebGL Template Setup
 
@@ -239,28 +239,51 @@ if (!HApps.IsPortalSite())
     return;
 }
 
-var initialized = await HApps.Initialize();
-if (!initialized)
+var connected = await HApps.Connect();
+if (!connected)
 {
-    // Handle initialization failure.
+    // Handle connection failure.
     return;
 }
 
-var authOk = await HApps.OpenPortalAuthPopup();
-if (!authOk)
+var signature = HApps.Provider.Signature;
+if (string.IsNullOrEmpty(signature))
 {
-    // Handle auth failure.
+    // Handle missing portal signature.
     return;
 }
+
+var authResponse = await Gateway.Post("/api/auth/portal", new
+{
+    signature = signature
+});
 
 var profile = await HApps.GetProfile();
 ```
 
+Interactive portal login from inside the game is a separate flow:
+
+```csharp
+var portalAuthOk = await HApps.OpenPortalAuthPopup();
+if (!portalAuthOk)
+{
+    // Handle portal auth failure.
+    return;
+}
+
+var authResponse = await Gateway.Post("/api/auth/portal", new
+{
+    signature = HApps.Provider.Signature
+});
+```
+
 ### Notes
 
-- `Initialize()` is for embedded flow only.
-- `OpenPortalAuthPopup()` is the public auth entrypoint for portal-managed login.
-- `GetProfile()` should be called after initialization and, if needed by your flow, after portal auth completes.
+- `Connect()` is for embedded flow only.
+- `Connect()` gives Unity access to platform-side context and stores portal signature in `HApps.Provider.Signature`.
+- your game backend should use that signature to resolve the authenticated user/session on the server side
+- `OpenPortalAuthPopup()` is the public auth entrypoint for showing portal login UI from the game
+- `GetProfile()` should be called after connection and, if needed by your flow, after portal auth completes
 - `IsPortalSite()` depends on `window.HApps.isPortal()`. It is an environment signal, not a user-profile fetch.
 
 ## Authentication Model
@@ -283,7 +306,18 @@ Use this when auth is handled by the portal.
 
 - input: no parameters
 - result: `bool`
-- follow-up: after success, profile and signature data become available through the SDK flow
+- follow-up: after success, the portal auth popup completes and updated profile/signature data become available through the SDK flow
+- typical use: call your backend again with the updated `HApps.Provider.Signature`
+
+## Portal Auth Flow
+
+Embedded portal auth works in two stages:
+
+1. The page initializes the browser bridge with `HApps.init(...)`.
+2. Unity calls `HApps.Connect()` to receive platform context and store portal signature in `HApps.Provider.Signature`.
+3. Your backend can use that signature to resolve or create the authenticated user/session.
+4. Unity can also call `HApps.OpenPortalAuthPopup()` to show portal auth UI from inside the game.
+5. After portal auth completes, your backend can use the refreshed signature if that flow needs server-side auth resolution.
 
 These methods are not interchangeable.
 
@@ -374,8 +408,8 @@ Example shape:
 
 - `IsPortalSite()` depends on the JS contract `window.HApps.isPortal()`.
 - `MakePayment()` accepts `orderId`, not `PaymentItem`.
-- `Initialize()` and `GetProfile()` may fail if the JS bridge is not correctly wired in the WebGL template.
-- `HApps.init(...)` in the page template and `HApps.Initialize()` in Unity are different steps. The first bootstraps the browser bridge, the second waits for the Unity-side embedded init flow.
+- `Connect()` and `GetProfile()` may fail if the JS bridge is not correctly wired in the WebGL template.
+- `HApps.init(...)` in the page template and `HApps.Connect()` in Unity are different steps. The first bootstraps the browser bridge, the second waits for the Unity-side bridge connection flow.
 
 ## Security Requirements
 

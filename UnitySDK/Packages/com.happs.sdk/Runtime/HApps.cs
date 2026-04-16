@@ -9,8 +9,8 @@ namespace HAppsSDK
 		public static HAppsProvider Provider =>
 			_provider ??= new HAppsWebProvider();
 
-		public static Task<bool> Initialize()
-			=> Provider.Initialize();
+		public static Task<bool> Connect()
+			=> Provider.Connect();
 
 		public static Task<UserData> GetProfile()
 			=> Provider.GetProfile();

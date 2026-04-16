@@ -12,7 +12,7 @@ namespace HAppsSDK
 
         private enum OperationType
         {
-            Init,
+            Connect,
             GetProfile,
             MakePayment,
             OpenAuthPopup,
@@ -33,7 +33,7 @@ namespace HAppsSDK
 
             _bridge = go.AddComponent<HAppsJSBridge>();
 
-            _bridge.OnInitialized += HandleInitialized;
+            _bridge.OnConnected += HandleConnected;
             _bridge.OnProfile += HandleProfile;
             _bridge.OnPaymentCompleted += HandlePaymentCompleted;
             _bridge.OnAuthPopupCompleted += HandleAuthPopupCompleted;
@@ -42,11 +42,11 @@ namespace HAppsSDK
             HAppsLog.Log("Provider created");
         }
 
-        public override Task<bool> Initialize()
+        public override Task<bool> Connect()
         {
             return StartOperation<bool>(
-                OperationType.Init,
-                () => _bridge.SendMessage("init", "{}"),
+                OperationType.Connect,
+                () => _bridge.SendMessage("connect", "{}"),
                 false,
                 DEFAULT_TIMEOUT_MS);
         }
@@ -97,7 +97,7 @@ namespace HAppsSDK
 
             if (_bridge != null)
             {
-                _bridge.OnInitialized -= HandleInitialized;
+                _bridge.OnConnected -= HandleConnected;
                 _bridge.OnProfile -= HandleProfile;
                 _bridge.OnPaymentCompleted -= HandlePaymentCompleted;
                 _bridge.OnAuthPopupCompleted -= HandleAuthPopupCompleted;
@@ -170,7 +170,7 @@ namespace HAppsSDK
             }
         }
 
-        private void HandleInitialized(InitData init, UserData user, SignatureData signature)
+        private void HandleConnected(InitData init, UserData user, SignatureData signature)
         {
             if (user != null)
             {
@@ -181,7 +181,7 @@ namespace HAppsSDK
             Signature = signature?.signature;
             _isInitialized = init?.ready == true || user != null;
 
-            Complete(OperationType.Init, _isInitialized);
+            Complete(OperationType.Connect, _isInitialized);
         }
 
         private void HandleProfile(UserData user)

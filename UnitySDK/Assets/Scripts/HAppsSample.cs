@@ -19,16 +19,16 @@ public sealed class HAppsSample : MonoBehaviour
     private GUIStyle _titleStyle;
     private GUIStyle _sectionStyle;
 
-    public async void PortalInitialize()
+    public async void PortalConnect()
     {
         try
         {
-            var initialized = await HApps.Initialize();
-            LogStatus($"Initialize: {initialized}");
+            var connected = await HApps.Connect();
+            LogStatus($"Connect: {connected}");
         }
         catch (Exception ex)
         {
-            LogError($"Initialize failed: {ex}");
+            LogError($"Connect failed: {ex}");
         }
     }
 
@@ -137,8 +137,8 @@ public sealed class HAppsSample : MonoBehaviour
 
         GUILayout.Space(gap);
         GUILayout.Label("Portal Flow", GetSectionStyle());
-        if (GUILayout.Button("Portal Initialize", GUILayout.Height(lineHeight)))
-            PortalInitialize();
+        if (GUILayout.Button("Portal Connect", GUILayout.Height(lineHeight)))
+            PortalConnect();
 
         if (GUILayout.Button("Portal Login", GUILayout.Height(lineHeight)))
             PortalLogin();

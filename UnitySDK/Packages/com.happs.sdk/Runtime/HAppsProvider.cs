@@ -15,7 +15,7 @@ namespace HAppsSDK
 		public bool IsLoggedIn => _loggedIn;
 		public UserData CurrentUser => _userData;
 
-		public abstract Task<bool> Initialize();
+		public abstract Task<bool> Connect();
 		public abstract Task<UserData> GetProfile();
 		public abstract Task<PaymentData> MakePayment(string orderId);
 		public abstract Task<AuthPopupData> OpenIdpAuthPopup(string url);

@@ -6,7 +6,7 @@ namespace HAppsSDK
 {
     public sealed class HAppsJSBridge : MonoBehaviour
     {
-        public event Action<InitData, UserData, SignatureData> OnInitialized;
+        public event Action<InitData, UserData, SignatureData> OnConnected;
         public event Action<UserData> OnProfile;
         public event Action<PaymentData> OnPaymentCreated;
         public event Action<PaymentData> OnPaymentCompleted;
@@ -45,8 +45,8 @@ namespace HAppsSDK
 
             switch (msg.type)
             {
-                case "init":
-                    OnInitialized?.Invoke(msg.initData, msg.userData, msg.signatureData);
+                case "connect":
+                    OnConnected?.Invoke(msg.initData, msg.userData, msg.signatureData);
                     break;
 
                 case "profile":
