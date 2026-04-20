@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.0.4
+
+- Add `HApps.IsReady()` for synchronous browser SDK readiness checks
+
 ## 2.0.3
 
 - Rename Unity-side initialization flow to `Connect()`

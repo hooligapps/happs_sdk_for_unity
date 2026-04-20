@@ -22,6 +22,16 @@ mergeInto(LibraryManager.library, {
 
         return window.HApps.isPortal() ? 1 : 0;
     },
+
+    _isReady: function () {
+        if (typeof window.HApps === "undefined")
+            return 0;
+
+        if (typeof window.HApps.isReady !== "function")
+            return 0;
+
+        return window.HApps.isReady() ? 1 : 0;
+    },
     
     _redirect: function (urlPtr) {
         var url = UTF8ToString(urlPtr);

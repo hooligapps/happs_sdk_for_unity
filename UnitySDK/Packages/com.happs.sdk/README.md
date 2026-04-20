@@ -9,12 +9,12 @@ Add the package to your Unity project through `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v2.0.3"
+    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v2.0.4"
   }
 }
 ```
 
-Use a release tag such as `v2.0.3`. During development you can temporarily point to a commit hash instead of a tag.
+Use a release tag such as `v2.0.4`. During development you can temporarily point to a commit hash instead of a tag.
 
 ## Runtime API
 
@@ -25,6 +25,7 @@ Task<PaymentData> HApps.MakePayment(string orderId)
 Task<AuthPopupData> HApps.OpenIdpAuthPopup(string url)
 Task<bool> HApps.OpenPortalAuthPopup()
 bool HApps.IsPortalSite()
+bool HApps.IsReady()
 void HApps.Shutdown()
 ```
 
@@ -58,6 +59,7 @@ Embedded portal flow:
 ## Notes
 
 - `IsPortalSite()` depends on `window.HApps.isPortal()`
+- `IsReady()` depends on `window.HApps.isReady()`
 - `MakePayment()` accepts backend-created `orderId`
 - `OpenIdpAuthPopup(url)` returns `AuthPopupData`, not plain `string`
 - `AuthPopupData` supports both ticket-based and cookie-based session auth

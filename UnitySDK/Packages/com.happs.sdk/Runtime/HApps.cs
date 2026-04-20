@@ -27,6 +27,9 @@ namespace HAppsSDK
 		public static bool IsPortalSite()
 			=> Provider.IsPortalSite();
 
+		public static bool IsReady()
+			=> HAppsJSBridge.IsReady();
+
 		public static void Shutdown()
 		{
 			HAppsLog.Log("Shutdown");

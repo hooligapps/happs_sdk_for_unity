@@ -81,10 +81,13 @@ namespace HAppsSDK
         [DllImport("__Internal")]
         private static extern int _isPortalSite();
         [DllImport("__Internal")]
+        private static extern int _isReady();
+        [DllImport("__Internal")]
         private static extern void _redirect(string url);
 #else
         private static void _sendMessage(string type, string message) { }
         private static int _isPortalSite() { return 0; }
+        private static int _isReady() { return 1; }
         private static void _redirect(string url) { }
 #endif
 
@@ -111,6 +114,15 @@ namespace HAppsSDK
             return _isPortalSite() == 1;
 #else
             return false;
+#endif
+        }
+
+        public static bool IsReady()
+        {
+#if UNITY_WEBGL && !UNITY_EDITOR
+            return _isReady() == 1;
+#else
+            return true;
 #endif
         }
         
