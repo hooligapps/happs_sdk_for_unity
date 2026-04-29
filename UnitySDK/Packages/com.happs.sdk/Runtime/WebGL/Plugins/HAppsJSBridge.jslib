@@ -36,5 +36,12 @@ mergeInto(LibraryManager.library, {
     _redirect: function (urlPtr) {
         var url = UTF8ToString(urlPtr);
         window.location.href = url;
+    },
+
+    _focusWindow: function () {
+        try {
+            window.focus();
+        } catch (e) {
+        }
     }
 });

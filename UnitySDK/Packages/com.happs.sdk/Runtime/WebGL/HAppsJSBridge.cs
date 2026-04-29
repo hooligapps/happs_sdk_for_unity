@@ -84,11 +84,14 @@ namespace HAppsSDK
         private static extern int _isReady();
         [DllImport("__Internal")]
         private static extern void _redirect(string url);
+        [DllImport("__Internal")]
+        private static extern void _focusWindow();
 #else
         private static void _sendMessage(string type, string message) { }
         private static int _isPortalSite() { return 0; }
         private static int _isReady() { return 1; }
         private static void _redirect(string url) { }
+        private static void _focusWindow() { }
 #endif
 
         public void SendMessage(string type, string payloadJson)
@@ -132,6 +135,14 @@ namespace HAppsSDK
             _redirect(url);
 #else
             Application.OpenURL(url);
+#endif
+        }
+
+        public static void TryFocusWindow()
+        {
+#if UNITY_WEBGL && !UNITY_EDITOR
+            HAppsLog.Log("Trying to focus window");
+            _focusWindow();
 #endif
         }
     }

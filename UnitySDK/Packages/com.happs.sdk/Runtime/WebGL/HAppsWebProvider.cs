@@ -194,6 +194,7 @@ namespace HAppsSDK
 
         private void HandlePaymentCompleted(PaymentData data)
         {
+            HAppsJSBridge.TryFocusWindow();
             Complete(OperationType.MakePayment, data);
         }
 
