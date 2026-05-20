@@ -216,6 +216,7 @@ namespace HAppsSDK
             if (!string.IsNullOrEmpty(sig))
                 Signature = sig;
 
+            RaiseAuthCompleted(user, signature);
             Complete(OperationType.OpenPortalAuth, !string.IsNullOrEmpty(sig));
         }
     }

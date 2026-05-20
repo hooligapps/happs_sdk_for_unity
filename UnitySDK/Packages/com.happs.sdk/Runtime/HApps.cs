@@ -1,3 +1,4 @@
+using System;
 using System.Threading.Tasks;
 
 namespace HAppsSDK
@@ -5,6 +6,16 @@ namespace HAppsSDK
 	public static class HApps
 	{
 		private static HAppsProvider _provider;
+
+		public static event Action<UserData, SignatureData> AuthCompleted
+		{
+			add => Provider.AuthCompleted += value;
+			remove
+			{
+				if (_provider != null)
+					_provider.AuthCompleted -= value;
+			}
+		}
 
 		public static HAppsProvider Provider =>
 			_provider ??= new HAppsWebProvider();

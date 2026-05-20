@@ -9,6 +9,8 @@ namespace HAppsSDK
 		protected bool _loggedIn;
 		protected bool _isInitialized;
 
+		public event Action<UserData, SignatureData> AuthCompleted;
+
 		public string Signature { get; protected set; }
 
 		public bool IsInitialized => _isInitialized;
@@ -22,6 +24,11 @@ namespace HAppsSDK
 		public abstract Task<bool> OpenPortalAuthPopup();
 		
 		public virtual bool IsPortalSite() => false;
+
+		protected void RaiseAuthCompleted(UserData user, SignatureData signature)
+		{
+			AuthCompleted?.Invoke(user, signature);
+		}
 
 		public virtual void Dispose() { }
     }

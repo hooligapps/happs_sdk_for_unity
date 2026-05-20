@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.0.5
+
+- Add `HApps.AuthCompleted` event for subscribing to incoming `auth_complete`
+
 ## 2.0.5-preview.1
 
 - Add best-effort `window.focus()` restore after payment completion for WebGL host pages that pause on blur
