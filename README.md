@@ -9,7 +9,7 @@ Add the package to your Unity project through `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v2.0.4"
+    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v2.0.5"
   }
 }
 ```
@@ -33,6 +33,7 @@ Task<UserData> HApps.GetProfile()
 Task<PaymentData> HApps.MakePayment(string orderId)
 Task<AuthPopupData> HApps.OpenIdpAuthPopup(string url)
 Task<bool> HApps.OpenPortalAuthPopup()
+event Action<UserData, SignatureData> HApps.AuthCompleted
 bool HApps.IsPortalSite()
 bool HApps.IsReady()
 void HApps.Shutdown()
@@ -45,6 +46,7 @@ Method semantics:
 - `MakePayment(orderId)` starts a payment flow for an already created backend order.
 - `OpenIdpAuthPopup(url)` opens standalone backend auth popup and returns `AuthPopupData` for either ticket-based or cookie-based session auth.
 - `OpenPortalAuthPopup()` opens portal-managed auth UI and returns `true` when portal auth completes successfully.
+- `AuthCompleted` fires when the external page script sends `auth_complete`, even if you are not awaiting `OpenPortalAuthPopup()`.
 - `IsPortalSite()` reflects `window.HApps.isPortal()` from the JS environment.
 - `IsReady()` reflects `window.HApps.isReady()` from the JS environment.
 - `Shutdown()` disposes the current provider instance.

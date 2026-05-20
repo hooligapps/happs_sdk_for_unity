@@ -9,12 +9,12 @@ Add the package to your Unity project through `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v2.0.4"
+    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v2.0.5"
   }
 }
 ```
 
-Use a release tag such as `v2.0.4`. During development you can temporarily point to a commit hash instead of a tag.
+Use a release tag such as `v2.0.5`. During development you can temporarily point to a commit hash instead of a tag.
 
 ## Runtime API
 
@@ -24,6 +24,7 @@ Task<UserData> HApps.GetProfile()
 Task<PaymentData> HApps.MakePayment(string orderId)
 Task<AuthPopupData> HApps.OpenIdpAuthPopup(string url)
 Task<bool> HApps.OpenPortalAuthPopup()
+event Action<UserData, SignatureData> HApps.AuthCompleted
 bool HApps.IsPortalSite()
 bool HApps.IsReady()
 void HApps.Shutdown()
@@ -53,6 +54,7 @@ Embedded portal flow:
 - call `Connect()` to receive platform context and store portal signature in `HApps.Provider.Signature`
 - use that signature in your backend auth flow to resolve the user/session
 - call `OpenPortalAuthPopup()` when you need to show portal login UI from the game
+- subscribe to `AuthCompleted` if you need to react to external `auth_complete` messages without awaiting `OpenPortalAuthPopup()`
 - after portal auth, your backend can use the refreshed signature if that flow needs server-side auth resolution
 - call `GetProfile()` when needed
 
@@ -60,6 +62,7 @@ Embedded portal flow:
 
 - `IsPortalSite()` depends on `window.HApps.isPortal()`
 - `IsReady()` depends on `window.HApps.isReady()`
+- `AuthCompleted` fires on incoming `auth_complete` messages from the page script
 - `MakePayment()` accepts backend-created `orderId`
 - `OpenIdpAuthPopup(url)` returns `AuthPopupData`, not plain `string`
 - `AuthPopupData` supports both ticket-based and cookie-based session auth
