@@ -58,6 +58,25 @@ Embedded portal flow:
 - after portal auth, your backend can use the refreshed signature if that flow needs server-side auth resolution
 - call `GetProfile()` when needed
 
+Example subscription:
+
+```csharp
+private void OnEnable()
+{
+    HApps.AuthCompleted += HandleAuthCompleted;
+}
+
+private void OnDisable()
+{
+    HApps.AuthCompleted -= HandleAuthCompleted;
+}
+
+private void HandleAuthCompleted(UserData user, SignatureData signature)
+{
+    Debug.Log($"auth_complete: {user?.userId}, {signature?.signature}");
+}
+```
+
 ## Notes
 
 - `IsPortalSite()` depends on `window.HApps.isPortal()`

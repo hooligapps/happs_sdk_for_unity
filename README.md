@@ -281,6 +281,25 @@ var authResponse = await Gateway.Post("/api/auth/portal", new
 });
 ```
 
+If you need to react to an external `auth_complete` without awaiting `OpenPortalAuthPopup()`, subscribe to the event:
+
+```csharp
+private void OnEnable()
+{
+    HApps.AuthCompleted += HandleAuthCompleted;
+}
+
+private void OnDisable()
+{
+    HApps.AuthCompleted -= HandleAuthCompleted;
+}
+
+private void HandleAuthCompleted(UserData user, SignatureData signature)
+{
+    Debug.Log($"auth_complete: {user?.userId}, {signature?.signature}");
+}
+```
+
 ### Notes
 
 - `Connect()` is for embedded flow only.
