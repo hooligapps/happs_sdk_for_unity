@@ -7,31 +7,14 @@ namespace HAppsSDK
 	{
 		protected UserData _userData;
 		protected bool _loggedIn;
-		protected bool _isInitialized;
 
-		public event Action<UserData, SignatureData> AuthCompleted;
-
-		public string Signature { get; protected set; }
-
-		public bool IsInitialized => _isInitialized;
 		public bool IsLoggedIn => _loggedIn;
 		public UserData CurrentUser => _userData;
 
-		public abstract Task<bool> Connect();
 		public abstract Task<UserData> GetProfile();
 		public abstract Task<PaymentData> MakePayment(string orderId);
-		public abstract Task<AuthPopupData> OpenIdpAuthPopup(string url);
-		public abstract Task<bool> OpenPortalAuthPopup();
-		
-		public virtual bool IsPortalSite() => false;
-
-		protected void RaiseAuthCompleted(UserData user, SignatureData signature)
-		{
-			AuthCompleted?.Invoke(user, signature);
-		}
-
 		public virtual void Dispose() { }
-    }
+	}
 
 	[Serializable]
 	public class HAppsMessage

@@ -23,7 +23,7 @@ public sealed class HAppsSample : MonoBehaviour
     {
         try
         {
-            var connected = await HApps.Connect();
+            var connected = await HApps.Web.Connect();
             LogStatus($"Connect: {connected}");
         }
         catch (Exception ex)
@@ -36,7 +36,7 @@ public sealed class HAppsSample : MonoBehaviour
     {
         try
         {
-            var authOk = await HApps.OpenPortalAuthPopup();
+            var authOk = await HApps.Web.OpenPortalAuthPopup();
             LogStatus($"Portal auth: {authOk}");
         }
         catch (Exception ex)
@@ -61,7 +61,7 @@ public sealed class HAppsSample : MonoBehaviour
         try
         {
             var url = BuildIdpUrl(serverUrl, launchToken);
-            var data = await HApps.OpenIdpAuthPopup(url);
+            var data = await HApps.Web.OpenIdpAuthPopup(url);
 
             LogStatus($"IDP data: {data.flow} {data.ticket}");
         }
@@ -75,7 +75,7 @@ public sealed class HAppsSample : MonoBehaviour
     {
         try
         {
-            var profile = await HApps.GetProfile();
+            var profile = await HApps.Web.GetProfile();
             LogStatus($"Profile: {(profile != null ? profile.ToString() : "null")}");
         }
         catch (Exception ex)
@@ -94,7 +94,7 @@ public sealed class HAppsSample : MonoBehaviour
 
         try
         {
-            var payment = await HApps.MakePayment(orderId);
+            var payment = await HApps.Web.MakePayment(orderId);
             LogStatus($"Payment: {payment}");
         }
         catch (Exception ex)
@@ -105,7 +105,7 @@ public sealed class HAppsSample : MonoBehaviour
 
     public void LogEnvironment()
     {
-        LogStatus($"IsPortalSite={HApps.IsPortalSite()}");
+        LogStatus($"IsPortalSite={HApps.Web.IsPortalSite()}, IsReady={HApps.Web.IsReady()}");
     }
 
     public void ShutdownSdk()

@@ -10,6 +10,10 @@ namespace HAppsSDK
     {
         public const string Version = "1.0.0";
 
+        public event Action<UserData, SignatureData> AuthCompleted;
+        public string Signature { get; private set; }
+        public bool IsInitialized { get; private set; }
+
         private enum OperationType
         {
             Connect,
@@ -42,7 +46,7 @@ namespace HAppsSDK
             HAppsLog.Log("Provider created");
         }
 
-        public override Task<bool> Connect()
+        public Task<bool> Connect()
         {
             return StartOperation<bool>(
                 OperationType.Connect,
@@ -71,7 +75,7 @@ namespace HAppsSDK
                 null);
         }
 
-        public override Task<AuthPopupData> OpenIdpAuthPopup(string url)
+        public Task<AuthPopupData> OpenIdpAuthPopup(string url)
         {
             var json = JsonUtility.ToJson(new OpenAuthPopupRequest { url = url });
 
@@ -82,7 +86,7 @@ namespace HAppsSDK
                 null);
         }
 
-        public override Task<bool> OpenPortalAuthPopup()
+        public Task<bool> OpenPortalAuthPopup()
         {
             return StartOperation<bool>(
                 OperationType.OpenPortalAuth,
@@ -112,9 +116,19 @@ namespace HAppsSDK
             _operations.Clear();
         }
 
-        public override bool IsPortalSite()
+        public bool IsPortalSite()
         {
             return HAppsJSBridge.IsPortalSite();
+        }
+
+        public bool IsReady()
+        {
+            return HAppsJSBridge.IsReady();
+        }
+
+        private void RaiseAuthCompleted(UserData user, SignatureData signature)
+        {
+            AuthCompleted?.Invoke(user, signature);
         }
 
         private Task<T> StartOperation<T>(OperationType type, Action startAction, bool allowRestart, int? timeoutMs)
@@ -179,9 +193,9 @@ namespace HAppsSDK
             }
 
             Signature = signature?.signature;
-            _isInitialized = init?.ready == true || user != null;
+            IsInitialized = init?.ready == true || user != null;
 
-            Complete(OperationType.Connect, _isInitialized);
+            Complete(OperationType.Connect, IsInitialized);
         }
 
         private void HandleProfile(UserData user)

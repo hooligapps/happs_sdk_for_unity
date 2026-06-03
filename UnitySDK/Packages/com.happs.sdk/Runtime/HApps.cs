@@ -5,48 +5,73 @@ namespace HAppsSDK
 {
 	public static class HApps
 	{
-		private static HAppsProvider _provider;
+		private static HAppsWebProvider _web;
+		private static HAppsMobileProvider _mobile;
+
+		public static HAppsWebProvider Web =>
+			_web ??= new HAppsWebProvider();
+
+		public static HAppsMobileProvider Mobile =>
+			_mobile ??= new HAppsMobileProvider();
+
+		// Backward-compatible alias for existing Web integrations.
+		public static HAppsWebProvider Provider => Web;
 
 		public static event Action<UserData, SignatureData> AuthCompleted
 		{
-			add => Provider.AuthCompleted += value;
+			add => Web.AuthCompleted += value;
 			remove
 			{
-				if (_provider != null)
-					_provider.AuthCompleted -= value;
+				if (_web != null)
+					_web.AuthCompleted -= value;
 			}
 		}
 
-		public static HAppsProvider Provider =>
-			_provider ??= new HAppsWebProvider();
-
 		public static Task<bool> Connect()
-			=> Provider.Connect();
+			=> Web.Connect();
 
 		public static Task<UserData> GetProfile()
-			=> Provider.GetProfile();
+			=> Current.GetProfile();
 
 		public static Task<PaymentData> MakePayment(string orderId)
-			=> Provider.MakePayment(orderId);
+			=> Current.MakePayment(orderId);
 
 		public static Task<AuthPopupData> OpenIdpAuthPopup(string url)
-			=> Provider.OpenIdpAuthPopup(url);
+			=> Web.OpenIdpAuthPopup(url);
 
 		public static Task<bool> OpenPortalAuthPopup()
-			=> Provider.OpenPortalAuthPopup();
+			=> Web.OpenPortalAuthPopup();
 
 		public static bool IsPortalSite()
-			=> Provider.IsPortalSite();
+			=> Web.IsPortalSite();
 
 		public static bool IsReady()
-			=> HAppsJSBridge.IsReady();
+			=> Web.IsReady();
+
+		public static void ConfigureMobile(HAppsMobileAuthOptions options, IMobileTokenStore tokenStore = null)
+			=> Mobile.Configure(options, tokenStore);
 
 		public static void Shutdown()
 		{
 			HAppsLog.Log("Shutdown");
 
-			_provider?.Dispose();
-			_provider = null;
+			_web?.Dispose();
+			_web = null;
+
+			_mobile?.Dispose();
+			_mobile = null;
+		}
+
+		private static HAppsProvider Current
+		{
+			get
+			{
+#if (UNITY_IOS || UNITY_ANDROID) && !UNITY_EDITOR
+				return Mobile;
+#else
+				return Web;
+#endif
+			}
 		}
 	}
 }
