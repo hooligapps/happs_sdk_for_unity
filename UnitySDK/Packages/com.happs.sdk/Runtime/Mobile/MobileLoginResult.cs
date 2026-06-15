@@ -7,7 +7,13 @@ namespace HAppsSDK
 		public string AccessToken;
 		public string IdToken;
 		public string RefreshToken;
+		public string TokenType;
+		public int ExpiresIn;
+		public string Scope;
+
+		public string Code;
+		public string CodeVerifier;
+		public string RedirectUri;
 		public string Error;
-		public UserData User;
 	}
 }

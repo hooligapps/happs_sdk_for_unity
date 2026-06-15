@@ -21,6 +21,7 @@ namespace HAppsSDK
 		{
 			_options = options ?? throw new ArgumentNullException(nameof(options));
 			_tokenStore = tokenStore ?? new InMemoryMobileTokenStore();
+			HAppsLog.Log($"Mobile configured: authority={_options.Authority}, clientId={_options.ClientId}, redirectUri={_options.RedirectUri}, logoutRedirectUri={_options.PostLogoutRedirectUri}, scope={_options.Scope}");
 		}
 
 		public async Task<MobileLoginResult> LoginAsync()
@@ -38,7 +39,7 @@ namespace HAppsSDK
 
 			void OnDeepLink(string url)
 			{
-				HandleLoginDeepLink(url, state, codeVerifier, discovery, loginTcs);
+				HandleLoginDeepLink(url, state, codeVerifier, loginTcs);
 			}
 
 			_deepLinkListener.DeepLinkReceived += OnDeepLink;
@@ -53,16 +54,11 @@ namespace HAppsSDK
 			{
 				var authorizeUrl = BuildAuthorizeUrl(discovery.authorization_endpoint, state, nonce, codeChallenge);
 				HAppsLog.Log($"Opening mobile auth URL: {authorizeUrl}");
+				HAppsLog.Log($"Mobile auth state={state}, nonce={nonce}, codeVerifierLength={codeVerifier.Length}");
 				Application.OpenURL(authorizeUrl);
 
 				var result = await loginTcs.Task;
-
-				if (result.IsSuccess)
-				{
-					_userData = result.User;
-					_loggedIn = result.User != null || !string.IsNullOrEmpty(result.AccessToken);
-				}
-
+				HAppsLog.Log($"Mobile login result: success={result.IsSuccess}, hasAccessToken={!string.IsNullOrEmpty(result.AccessToken)}, error={result.Error}");
 				return result;
 			}
 			finally
@@ -74,71 +70,20 @@ namespace HAppsSDK
 
 		public async Task LogoutAsync()
 		{
-			await _tokenStore.ClearAsync();
+			HAppsLog.Log("Mobile logout: clearing local state");
 			_userData = null;
 			_loggedIn = false;
-
-			if (_options == null)
-				return;
-
-			var discovery = await GetDiscoveryAsync();
-			if (string.IsNullOrEmpty(discovery.end_session_endpoint) || string.IsNullOrEmpty(_options.PostLogoutRedirectUri))
-				return;
-
-			Application.OpenURL($"{discovery.end_session_endpoint}?post_logout_redirect_uri={Uri.EscapeDataString(_options.PostLogoutRedirectUri)}");
+			await _tokenStore.ClearAsync();
 		}
 
-		public async Task RefreshSessionAsync()
+		public Task RefreshSessionAsync()
 		{
-			EnsureConfigured();
-			var stored = await _tokenStore.LoadAsync();
-
-			if (stored == null || string.IsNullOrEmpty(stored.RefreshToken))
-				throw new InvalidOperationException("No refresh token is available.");
-
-			var discovery = await GetDiscoveryAsync();
-			var tokenResponse = await RequestTokenAsync(discovery.token_endpoint, new Dictionary<string, string>
-			{
-				["grant_type"] = "refresh_token",
-				["client_id"] = _options.ClientId,
-				["refresh_token"] = stored.RefreshToken
-			});
-
-			var tokenSet = new MobileTokenSet
-			{
-				AccessToken = tokenResponse.access_token,
-				IdToken = string.IsNullOrEmpty(tokenResponse.id_token) ? stored.IdToken : tokenResponse.id_token,
-				RefreshToken = string.IsNullOrEmpty(tokenResponse.refresh_token) ? stored.RefreshToken : tokenResponse.refresh_token
-			};
-
-			await _tokenStore.SaveAsync(tokenSet);
-
-			if (!string.IsNullOrEmpty(discovery.userinfo_endpoint) && !string.IsNullOrEmpty(tokenSet.AccessToken))
-			{
-				_userData = await RequestUserInfoAsync(discovery.userinfo_endpoint, tokenSet.AccessToken);
-				_loggedIn = _userData != null;
-			}
-			else
-			{
-				_loggedIn = !string.IsNullOrEmpty(tokenSet.AccessToken);
-			}
+			throw new NotSupportedException("RefreshSessionAsync is not implemented yet.");
 		}
 
-		public override async Task<UserData> GetProfile()
+		public override Task<UserData> GetProfile()
 		{
-			EnsureConfigured();
-			var stored = await _tokenStore.LoadAsync();
-			var discovery = await GetDiscoveryAsync();
-
-			if (stored == null || string.IsNullOrEmpty(stored.AccessToken))
-				return _userData;
-
-			if (string.IsNullOrEmpty(discovery.userinfo_endpoint))
-				return _userData;
-
-			_userData = await RequestUserInfoAsync(discovery.userinfo_endpoint, stored.AccessToken);
-			_loggedIn = _userData != null;
-			return _userData;
+			throw new NotSupportedException("GetProfile is not implemented for mobile auth yet. Resolve user profile via your backend after game-login.");
 		}
 
 		public override Task<PaymentData> MakePayment(string orderId)
@@ -182,6 +127,7 @@ namespace HAppsSDK
 			UnityEngine.Object.DontDestroyOnLoad(go);
 			_deepLinkListener = go.AddComponent<HAppsMobileDeepLinkListener>();
 			_deepLinkListener.DeepLinkReceived += HandleStrayDeepLink;
+			HAppsLog.Log("Mobile deep link listener created");
 		}
 
 		private void HandleStrayDeepLink(string url)
@@ -199,7 +145,9 @@ namespace HAppsSDK
 
 			var authority = _options.Authority.TrimEnd('/');
 			var url = $"{authority}/.well-known/openid-configuration";
+			HAppsLog.Log($"Loading OIDC discovery: {url}");
 			var json = await SendGetAsync(url);
+			HAppsLog.Log($"OIDC discovery response: {json}");
 			_discovery = JsonUtility.FromJson<OidcDiscoveryDocument>(json);
 
 			if (_discovery == null || string.IsNullOrEmpty(_discovery.authorization_endpoint) || string.IsNullOrEmpty(_discovery.token_endpoint))
@@ -229,7 +177,6 @@ namespace HAppsSDK
 			string url,
 			string expectedState,
 			string codeVerifier,
-			OidcDiscoveryDocument discovery,
 			TaskCompletionSource<MobileLoginResult> loginTcs)
 		{
 			if (loginTcs.Task.IsCompleted)
@@ -237,130 +184,73 @@ namespace HAppsSDK
 
 			try
 			{
+				HAppsLog.Log($"Handling mobile deep link: {url}");
+
 				if (string.IsNullOrWhiteSpace(url) || !url.StartsWith(_options.RedirectUri, StringComparison.OrdinalIgnoreCase))
+				{
+					HAppsLog.Warn($"Ignoring deep link that does not match redirectUri. expected={_options.RedirectUri}");
 					return;
+				}
 
 				var query = ParseQuery(url);
+				HAppsLog.Log($"Deep link query parsed. Keys={string.Join(",", query.Keys)}");
 
 				if (query.TryGetValue("error", out var error))
 				{
+					HAppsLog.Warn($"Mobile auth deep link returned error={error}");
 					loginTcs.TrySetResult(new MobileLoginResult { Error = error });
 					return;
 				}
 
 				if (!query.TryGetValue("state", out var returnedState) || returnedState != expectedState)
 				{
+					HAppsLog.Error($"OIDC state mismatch. expected={expectedState}, actual={returnedState}");
 					loginTcs.TrySetException(new InvalidOperationException("OIDC state mismatch."));
 					return;
 				}
 
 				if (!query.TryGetValue("code", out var code) || string.IsNullOrWhiteSpace(code))
 				{
+					HAppsLog.Error("OIDC redirect does not contain authorization code.");
 					loginTcs.TrySetException(new InvalidOperationException("OIDC redirect does not contain authorization code."));
 					return;
 				}
 
-				var tokenResponse = await RequestTokenAsync(discovery.token_endpoint, new Dictionary<string, string>
+				HAppsLog.Log($"Authorization code received. length={code.Length}");
+				var discovery = await GetDiscoveryAsync();
+				var tokens = await ExchangeCodeAsync(
+					discovery.token_endpoint,
+					_options.ClientId,
+					code,
+					_options.RedirectUri,
+					codeVerifier);
+
+				await _tokenStore.SaveAsync(new MobileTokenSet
 				{
-					["grant_type"] = "authorization_code",
-					["client_id"] = _options.ClientId,
-					["code"] = code,
-					["redirect_uri"] = _options.RedirectUri,
-					["code_verifier"] = codeVerifier
+					AccessToken = tokens.access_token,
+					IdToken = tokens.id_token,
+					RefreshToken = tokens.refresh_token
 				});
 
-				var tokenSet = new MobileTokenSet
-				{
-					AccessToken = tokenResponse.access_token,
-					IdToken = tokenResponse.id_token,
-					RefreshToken = tokenResponse.refresh_token
-				};
-
-				await _tokenStore.SaveAsync(tokenSet);
-
-				UserData user = null;
-				if (!string.IsNullOrEmpty(discovery.userinfo_endpoint) && !string.IsNullOrEmpty(tokenSet.AccessToken))
-					user = await RequestUserInfoAsync(discovery.userinfo_endpoint, tokenSet.AccessToken);
-
+				_loggedIn = !string.IsNullOrEmpty(tokens.access_token);
+				HAppsLog.Log($"Token exchange completed. accessTokenLength={tokens.access_token?.Length ?? 0}, refreshTokenLength={tokens.refresh_token?.Length ?? 0}");
 				loginTcs.TrySetResult(new MobileLoginResult
 				{
-					AccessToken = tokenSet.AccessToken,
-					IdToken = tokenSet.IdToken,
-					RefreshToken = tokenSet.RefreshToken,
-					User = user
+					AccessToken = tokens.access_token,
+					IdToken = tokens.id_token,
+					RefreshToken = tokens.refresh_token,
+					TokenType = tokens.token_type,
+					ExpiresIn = tokens.expires_in,
+					Scope = tokens.scope,
+					Code = code,
+					CodeVerifier = codeVerifier,
+					RedirectUri = _options.RedirectUri
 				});
 			}
 			catch (Exception ex)
 			{
 				loginTcs.TrySetException(ex);
 			}
-		}
-
-		private async Task<OidcTokenResponse> RequestTokenAsync(string tokenEndpoint, Dictionary<string, string> payload)
-		{
-			var body = Encoding.UTF8.GetBytes(ToQueryString(payload));
-			using var request = new UnityWebRequest(tokenEndpoint, UnityWebRequest.kHttpVerbPOST);
-			request.uploadHandler = new UploadHandlerRaw(body);
-			request.downloadHandler = new DownloadHandlerBuffer();
-			request.SetRequestHeader("Content-Type", "application/x-www-form-urlencoded");
-			request.SetRequestHeader("Accept", "application/json");
-			var operation = request.SendWebRequest();
-			await AwaitAsyncOperation(operation);
-
-			if (request.result != UnityWebRequest.Result.Success)
-				throw new InvalidOperationException($"OIDC token request failed: {request.error}");
-
-			var response = JsonUtility.FromJson<OidcTokenResponse>(request.downloadHandler.text);
-			if (response != null && !string.IsNullOrEmpty(response.error))
-				throw new InvalidOperationException($"OIDC token error: {response.error}");
-
-			if (response == null || string.IsNullOrEmpty(response.access_token))
-				throw new InvalidOperationException("OIDC token response is invalid.");
-
-			return response;
-		}
-
-		private async Task<UserData> RequestUserInfoAsync(string userInfoEndpoint, string accessToken)
-		{
-			using var request = UnityWebRequest.Get(userInfoEndpoint);
-			request.SetRequestHeader("Authorization", $"Bearer {accessToken}");
-			request.SetRequestHeader("Accept", "application/json");
-			var operation = request.SendWebRequest();
-			await AwaitAsyncOperation(operation);
-
-			if (request.result != UnityWebRequest.Result.Success)
-				throw new InvalidOperationException($"OIDC userinfo request failed: {request.error}");
-
-			var userInfo = JsonUtility.FromJson<OidcUserInfoResponse>(request.downloadHandler.text);
-			if (userInfo == null)
-				return null;
-
-			return new UserData
-			{
-				userId = userInfo.sub,
-				userName = !string.IsNullOrEmpty(userInfo.preferred_username) ? userInfo.preferred_username : userInfo.name,
-				verified = userInfo.email_verified
-			};
-		}
-
-		private static async Task<string> SendGetAsync(string url)
-		{
-			using var request = UnityWebRequest.Get(url);
-			request.SetRequestHeader("Accept", "application/json");
-			var operation = request.SendWebRequest();
-			await AwaitAsyncOperation(operation);
-
-			if (request.result != UnityWebRequest.Result.Success)
-				throw new InvalidOperationException($"GET request failed: {request.error}");
-
-			return request.downloadHandler.text;
-		}
-
-		private static Task AwaitAsyncOperation(AsyncOperation operation)
-		{
-			var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-			operation.completed += _ => tcs.TrySetResult(true);
-			return tcs.Task;
 		}
 
 		private static Dictionary<string, string> ParseQuery(string url)
@@ -406,6 +296,73 @@ namespace HAppsSDK
 			}
 
 			return result;
+		}
+
+		private static async Task<string> SendGetAsync(string url)
+		{
+			using var request = UnityWebRequest.Get(url);
+			request.SetRequestHeader("Accept", "application/json");
+			var operation = request.SendWebRequest();
+			await AwaitAsyncOperation(operation);
+
+			if (request.result != UnityWebRequest.Result.Success)
+			{
+				HAppsLog.Error($"GET request failed: {url} error={request.error}");
+				throw new InvalidOperationException($"GET request failed: {request.error}");
+			}
+
+			return request.downloadHandler.text;
+		}
+
+		private static async Task<OidcTokenResponse> ExchangeCodeAsync(
+			string tokenEndpoint,
+			string clientId,
+			string code,
+			string redirectUri,
+			string codeVerifier)
+		{
+			var form = new Dictionary<string, string>
+			{
+				["grant_type"] = "authorization_code",
+				["client_id"] = clientId,
+				["code"] = code,
+				["redirect_uri"] = redirectUri,
+				["code_verifier"] = codeVerifier
+			};
+
+			var payload = ToQueryString(form);
+			HAppsLog.Log($"Exchanging authorization code at {tokenEndpoint}. codeLength={code?.Length ?? 0}, verifierLength={codeVerifier?.Length ?? 0}");
+			HAppsLog.Log($"Token exchange request URL: {tokenEndpoint}");
+			HAppsLog.Log($"Token exchange request body: {payload}");
+			using var request = new UnityWebRequest(tokenEndpoint, UnityWebRequest.kHttpVerbPOST);
+			request.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(payload));
+			request.downloadHandler = new DownloadHandlerBuffer();
+			request.SetRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+			request.SetRequestHeader("Accept", "application/json");
+			var operation = request.SendWebRequest();
+			await AwaitAsyncOperation(operation);
+
+			var responseText = request.downloadHandler.text;
+			HAppsLog.Log($"Token exchange response: {responseText}");
+
+			if (request.result != UnityWebRequest.Result.Success)
+			{
+				HAppsLog.Error($"Token exchange failed: endpoint={tokenEndpoint} error={request.error} response={responseText}");
+				throw new InvalidOperationException($"Token exchange failed: {request.error} {responseText}");
+			}
+
+			var response = JsonUtility.FromJson<OidcTokenResponse>(responseText);
+			if (response == null || string.IsNullOrWhiteSpace(response.access_token))
+				throw new InvalidOperationException("Token exchange response does not contain access_token.");
+
+			return response;
+		}
+
+		private static Task AwaitAsyncOperation(AsyncOperation operation)
+		{
+			var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+			operation.completed += _ => tcs.TrySetResult(true);
+			return tcs.Task;
 		}
 
 		private static string ToQueryString(Dictionary<string, string> values)
@@ -472,17 +429,9 @@ namespace HAppsSDK
 			public string id_token;
 			public string refresh_token;
 			public string token_type;
+			public int expires_in;
 			public string scope;
-			public string error;
 		}
 
-		[Serializable]
-		private sealed class OidcUserInfoResponse
-		{
-			public string sub;
-			public string name;
-			public string preferred_username;
-			public bool email_verified;
-		}
 	}
 }
