@@ -1,8 +1,14 @@
 # Changelog
 
+## 3.0.0
+
+- Remove flat Web shortcuts from `HApps`; use `HApps.Web.*` explicitly
+- Replace `HApps.Provider.Signature` with `HApps.Web.Signature`
+- Document the current mobile session, login, logout, and payment flows
+
 ## 2.0.5
 
-- Add `HApps.AuthCompleted` event for subscribing to incoming `auth_complete`
+- Add `HApps.Web.AuthCompleted` event for subscribing to incoming `auth_complete`
 
 ## 2.0.5-preview.1
 
@@ -10,7 +16,7 @@
 
 ## 2.0.4
 
-- Add `HApps.IsReady()` for synchronous browser SDK readiness checks
+- Add `HApps.Web.IsReady()` for synchronous browser SDK readiness checks
 
 ## 2.0.3
 

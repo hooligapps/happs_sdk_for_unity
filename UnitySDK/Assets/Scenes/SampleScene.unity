@@ -370,8 +370,15 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HAppsMobileSample
   configEndpoint: https://portal.igra.rocks/sandbox/mobile/config
-  gameLoginEndpoint: https://portal.igra.rocks/sandbox/mobile/game-login
-  clientId: test-test-mobile
+  clientId: lustage-mobile
+  initSessionEndpoint: https://portal.igra.rocks/api/v1/mobile/session/init
+  refreshSessionEndpoint: https://portal.igra.rocks/api/v1/mobile/session/refresh
+  createPaymentEndpoint: https://portal.igra.rocks/api/v1/mobile/payments
+  productId: test-product
+  price: 1.99
+  currency: USD
+  description: Test payment
+  requestId: req-001
   showDebugGui: 1
 --- !u!4 &1522833689
 Transform:

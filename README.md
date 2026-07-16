@@ -9,7 +9,7 @@ Add the package to your Unity project through `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v2.0.5"
+    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.0.0"
   }
 }
 ```
@@ -37,16 +37,15 @@ event Action<UserData, SignatureData> HApps.Web.AuthCompleted
 bool HApps.Web.IsPortalSite()
 bool HApps.Web.IsReady()
 
-Task<UserData> HApps.Mobile.GetProfile()
-Task<PaymentData> HApps.Mobile.MakePayment(string orderId)
+Task<MobileSession> HApps.Mobile.InitSessionAsync()
 Task<MobileLoginResult> HApps.Mobile.LoginAsync()
+Task<MobileSession> HApps.Mobile.RefreshSessionAsync()
+Task<MobileCreatePaymentResult> HApps.Mobile.CreatePaymentAsync(MobileCreatePaymentRequest request)
 Task HApps.Mobile.LogoutAsync()
-Task HApps.Mobile.RefreshSessionAsync()
+void HApps.ConfigureMobile(HAppsMobileAuthOptions options, IMobileTokenStore tokenStore = null)
 
 void HApps.Shutdown()
 ```
-
-The legacy flat methods such as `HApps.Connect()` and `HApps.OpenPortalAuthPopup()` are still kept as Web compatibility shortcuts.
 
 Method semantics:
 
@@ -58,7 +57,7 @@ Method semantics:
 - `HApps.Web.AuthCompleted` fires when the external page script sends `auth_complete`, even if you are not awaiting `OpenPortalAuthPopup()`.
 - `HApps.Web.IsPortalSite()` reflects `window.HApps.isPortal()` from the JS environment.
 - `HApps.Web.IsReady()` reflects `window.HApps.isReady()` from the JS environment.
-- `HApps.Mobile` is the native/mobile branch for future OIDC-based auth flows. The provider contract is in place, but the actual mobile OIDC implementation is not part of this package yet.
+- `HApps.Mobile` is the native/mobile branch for portal session bootstrap, OIDC login, and mobile payment creation.
 - `Shutdown()` disposes the current provider instance.
 
 ## Choose Your Flow
@@ -260,7 +259,7 @@ if (!connected)
     return;
 }
 
-var signature = HApps.Provider.Signature;
+var signature = HApps.Web.Signature;
 if (string.IsNullOrEmpty(signature))
 {
     // Handle missing portal signature.
@@ -287,7 +286,7 @@ if (!portalAuthOk)
 
 var authResponse = await Gateway.Post("/api/auth/portal", new
 {
-    signature = HApps.Provider.Signature
+    signature = HApps.Web.Signature
 });
 ```
 
@@ -313,7 +312,7 @@ private void HandleAuthCompleted(UserData user, SignatureData signature)
 ### Notes
 
 - `Connect()` is for embedded flow only.
-- `Connect()` gives Unity access to platform-side context and stores portal signature in `HApps.Provider.Signature`.
+- `Connect()` gives Unity access to platform-side context and stores portal signature in `HApps.Web.Signature`.
 - your game backend should use that signature to resolve the authenticated user/session on the server side
 - `OpenPortalAuthPopup()` is the public auth entrypoint for showing portal login UI from the game
 - `GetProfile()` should be called after connection and, if needed by your flow, after portal auth completes
@@ -340,14 +339,14 @@ Use this when auth is handled by the portal.
 - input: no parameters
 - result: `bool`
 - follow-up: after success, the portal auth popup completes and updated profile/signature data become available through the SDK flow
-- typical use: call your backend again with the updated `HApps.Provider.Signature`
+- typical use: call your backend again with the updated `HApps.Web.Signature`
 
 ## Portal Auth Flow
 
 Embedded portal auth works in two stages:
 
 1. The page initializes the browser bridge with `HApps.init(...)`.
-2. Unity calls `HApps.Web.Connect()` to receive platform context and store portal signature in `HApps.Provider.Signature`.
+2. Unity calls `HApps.Web.Connect()` to receive platform context and store portal signature in `HApps.Web.Signature`.
 3. Your backend can use that signature to resolve or create the authenticated user/session.
 4. Unity can also call `HApps.Web.OpenPortalAuthPopup()` to show portal auth UI from inside the game.
 5. After portal auth completes, your backend can use the refreshed signature if that flow needs server-side auth resolution.
@@ -370,6 +369,66 @@ if (profile != null)
 - `userId`
 - `userName`
 - `verified`
+
+## Mobile Flow
+
+The mobile provider is built around three separate responsibilities:
+
+- portal session bootstrap
+- OIDC login in the system browser
+- payment creation that opens checkout in the browser
+
+Configure it once:
+
+```csharp
+HApps.ConfigureMobile(new HAppsMobileAuthOptions
+{
+    Authority = "https://portal.igra.rocks/idp/oidc",
+    ClientId = "your-mobile-client-id",
+    RedirectUri = "com.example.game://auth/callback",
+    PostLogoutRedirectUri = "com.example.game://logout",
+    Scope = "openid email offline_access",
+    InitSessionUrl = "https://portal.igra.rocks/api/v1/mobile/session/init",
+    RefreshSessionUrl = "https://portal.igra.rocks/api/v1/mobile/session/refresh",
+    CreatePaymentUrl = "https://portal.igra.rocks/api/v1/mobile/payments"
+});
+```
+
+Recommended sequence:
+
+```csharp
+var session = await HApps.Mobile.InitSessionAsync();
+
+if (!session.Verified)
+{
+    var login = await HApps.Mobile.LoginAsync();
+    if (!login.IsSuccess)
+    {
+        Debug.LogError(login.Error);
+        return;
+    }
+}
+
+var payment = await HApps.Mobile.CreatePaymentAsync(new MobileCreatePaymentRequest
+{
+    RequestId = "req-123",
+    ProductId = "coins_pack_1",
+    Price = 1.99m,
+    Currency = "USD",
+    Description = "Coins Pack 1"
+});
+```
+
+Mobile behavior:
+
+- `InitSessionAsync()` calls portal `session/init` and returns `publicId`, portal access token, refresh token, and `verified`
+- `LoginAsync()` runs OIDC Authorization Code + PKCE and returns OIDC tokens
+- if a portal session already exists, the SDK includes `linkId=publicId` in the OIDC authorize URL
+- `CreatePaymentAsync()` sends the current portal access token in `Authorization: Bearer ...`
+- if payment creation returns `401 invalid_mobile_session`, the SDK tries `RefreshSessionAsync()`
+- if refresh returns `401 invalid_mobile_refresh`, the SDK falls back to `InitSessionAsync()`
+- `LogoutAsync()` clears local mobile tokens and immediately requests a fresh anonymous portal session
+- `CreatePaymentAsync()` only starts checkout and opens `paymentUrl`; payment confirmation stays on the integrator/backend side
 
 ## AuthPopupData
 
@@ -415,6 +474,8 @@ Important points:
 Payment lifecycle:
 
 `Unity -> JS -> Portal -> Checkout -> Portal -> JS -> Unity`
+
+For mobile, the SDK only creates the payment and opens checkout. Final payment verification should be handled by your backend or app-specific flow.
 
 ## Backend Requirements For Embedded Flow
 

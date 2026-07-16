@@ -7,6 +7,9 @@ namespace HAppsSDK
 		public string RedirectUri;
 		public string PostLogoutRedirectUri;
 		public string Scope;
+		public string InitSessionUrl;
+		public string RefreshSessionUrl;
+		public string CreatePaymentUrl;
 		public int LoginTimeoutMs = 180000;
 	}
 }

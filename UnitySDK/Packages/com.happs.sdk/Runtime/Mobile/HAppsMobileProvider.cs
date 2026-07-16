@@ -16,12 +16,21 @@ namespace HAppsSDK
 		private HAppsMobileDeepLinkListener _deepLinkListener;
 		private OidcDiscoveryDocument _discovery;
 		private string _pendingLoginState;
+		private MobileSession _currentSession;
+
+		public MobileSession CurrentSession => _currentSession;
 
 		public void Configure(HAppsMobileAuthOptions options, IMobileTokenStore tokenStore = null)
 		{
 			_options = options ?? throw new ArgumentNullException(nameof(options));
 			_tokenStore = tokenStore ?? new InMemoryMobileTokenStore();
-			HAppsLog.Log($"Mobile configured: authority={_options.Authority}, clientId={_options.ClientId}, redirectUri={_options.RedirectUri}, logoutRedirectUri={_options.PostLogoutRedirectUri}, scope={_options.Scope}");
+			HAppsLog.Log($"Mobile configured: authority={_options.Authority}, clientId={_options.ClientId}, redirectUri={_options.RedirectUri}, logoutRedirectUri={_options.PostLogoutRedirectUri}, scope={_options.Scope}, initSessionUrl={_options.InitSessionUrl}, refreshSessionUrl={_options.RefreshSessionUrl}");
+		}
+
+		public Task<MobileSession> InitSessionAsync()
+		{
+			EnsureConfigured();
+			return InitSessionInternalAsync();
 		}
 
 		public async Task<MobileLoginResult> LoginAsync()
@@ -70,15 +79,27 @@ namespace HAppsSDK
 
 		public async Task LogoutAsync()
 		{
+			EnsureConfigured();
+
 			HAppsLog.Log("Mobile logout: clearing local state");
 			_userData = null;
 			_loggedIn = false;
+			_currentSession = null;
 			await _tokenStore.ClearAsync();
+
+			HAppsLog.Log("Mobile logout: requesting fresh anonymous session");
+			await InitSessionInternalAsync();
 		}
 
-		public Task RefreshSessionAsync()
+		public async Task<MobileSession> RefreshSessionAsync()
 		{
-			throw new NotSupportedException("RefreshSessionAsync is not implemented yet.");
+			EnsureConfigured();
+
+			var tokenSet = await _tokenStore.LoadAsync();
+			if (tokenSet == null || string.IsNullOrWhiteSpace(tokenSet.RefreshToken))
+				throw new InvalidOperationException("RefreshSessionAsync requires mobile refresh token.");
+
+			return await RefreshSessionInternalAsync(tokenSet.RefreshToken);
 		}
 
 		public override Task<UserData> GetProfile()
@@ -89,6 +110,27 @@ namespace HAppsSDK
 		public override Task<PaymentData> MakePayment(string orderId)
 		{
 			throw new NotSupportedException("Mobile payment flow is not implemented yet.");
+		}
+
+		public async Task<MobileCreatePaymentResult> CreatePaymentAsync(MobileCreatePaymentRequest request)
+		{
+			EnsureConfigured();
+
+			if (request == null)
+				throw new ArgumentNullException(nameof(request));
+
+			EnsureSessionToken();
+
+			try
+			{
+				return await CreatePaymentInternalAsync(request);
+			}
+			catch (MobileApiException ex) when (IsInvalidMobileSession(ex))
+			{
+				HAppsLog.Warn($"Create payment requires session recovery. statusCode={ex.StatusCode}, response={ex.ResponseBody}");
+				await RecoverSessionAsync();
+				return await CreatePaymentInternalAsync(request);
+			}
 		}
 
 		public override void Dispose()
@@ -116,6 +158,77 @@ namespace HAppsSDK
 
 			if (string.IsNullOrWhiteSpace(_options.RedirectUri))
 				throw new InvalidOperationException("Mobile auth RedirectUri is not configured.");
+		}
+
+		private void EnsureSessionToken()
+		{
+			if (_currentSession == null || string.IsNullOrWhiteSpace(_currentSession.AccessToken))
+				throw new InvalidOperationException("Portal access token is missing. Call InitSessionAsync/RefreshSessionAsync first.");
+		}
+
+		private async Task<MobileCreatePaymentResult> CreatePaymentInternalAsync(MobileCreatePaymentRequest request)
+		{
+			if (string.IsNullOrWhiteSpace(_options.CreatePaymentUrl))
+				throw new InvalidOperationException("Portal create payment endpoint is not configured.");
+
+			var payload = new CreatePaymentPayload
+			{
+				productId = request.ProductId,
+				price = request.Price.ToString(System.Globalization.CultureInfo.InvariantCulture),
+				currency = request.Currency,
+				desc = request.Description,
+				requestId = request.RequestId
+			};
+
+			var json = JsonUtility.ToJson(payload);
+			HAppsLog.Log($"Creating mobile payment: url={_options.CreatePaymentUrl}");
+			HAppsLog.Log($"Create payment request body: {json}");
+			var responseText = await SendAuthorizedJsonPostAsync(_options.CreatePaymentUrl, _currentSession.AccessToken, json);
+			HAppsLog.Log($"Create payment raw response: {responseText}");
+			var response = JsonUtility.FromJson<CreatePaymentResponse>(responseText);
+			if (response == null || string.IsNullOrWhiteSpace(response.orderId) || string.IsNullOrWhiteSpace(response.paymentUrl))
+				throw new InvalidOperationException("Create payment response is invalid.");
+
+			HAppsLog.Log($"Create payment response: orderId={response.orderId}, paymentUrl={response.paymentUrl}");
+			Application.OpenURL(response.paymentUrl);
+
+			return new MobileCreatePaymentResult
+			{
+				OrderId = response.orderId,
+				PaymentUrl = response.paymentUrl
+			};
+		}
+
+		private async Task RecoverSessionAsync()
+		{
+			var tokenSet = await _tokenStore.LoadAsync();
+
+			if (!string.IsNullOrWhiteSpace(tokenSet?.RefreshToken))
+			{
+				try
+				{
+					HAppsLog.Log("Recovering mobile session via refreshSession");
+					await RefreshSessionInternalAsync(tokenSet.RefreshToken);
+					return;
+				}
+				catch (MobileApiException ex) when (IsInvalidMobileRefresh(ex))
+				{
+					HAppsLog.Warn($"Refresh token is invalid. Falling back to initSession. response={ex.ResponseBody}");
+				}
+			}
+
+			HAppsLog.Log("Recovering mobile session via initSession");
+			await InitSessionInternalAsync();
+		}
+
+		private static bool IsInvalidMobileSession(MobileApiException ex)
+		{
+			return ex.StatusCode == 401 && ex.ResponseBody.IndexOf("invalid_mobile_session", StringComparison.OrdinalIgnoreCase) >= 0;
+		}
+
+		private static bool IsInvalidMobileRefresh(MobileApiException ex)
+		{
+			return ex.StatusCode == 401 && ex.ResponseBody.IndexOf("invalid_mobile_refresh", StringComparison.OrdinalIgnoreCase) >= 0;
 		}
 
 		private void EnsureDeepLinkListener()
@@ -156,6 +269,132 @@ namespace HAppsSDK
 			return _discovery;
 		}
 
+		private async Task<MobileSession> InitSessionInternalAsync()
+		{
+			if (string.IsNullOrWhiteSpace(_options.InitSessionUrl))
+				throw new InvalidOperationException("Portal mobile session endpoint is not configured.");
+
+			var payload = new InitSessionRequest
+			{
+				clientId = _options.ClientId
+			};
+			var json = JsonUtility.ToJson(payload);
+
+			HAppsLog.Log($"Requesting portal initSession: url={_options.InitSessionUrl}");
+			HAppsLog.Log($"Portal initSession request body: {json}");
+			using var request = new UnityWebRequest(_options.InitSessionUrl, UnityWebRequest.kHttpVerbPOST);
+			request.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(json));
+			request.downloadHandler = new DownloadHandlerBuffer();
+			request.SetRequestHeader("Content-Type", "application/json");
+			request.SetRequestHeader("Accept", "application/json");
+
+			var operation = request.SendWebRequest();
+			await AwaitAsyncOperation(operation);
+
+			var responseText = request.downloadHandler.text;
+			HAppsLog.Log($"Portal initSession response: {responseText}");
+
+			if (request.result != UnityWebRequest.Result.Success)
+			{
+				HAppsLog.Error($"Portal initSession request failed: endpoint={_options.InitSessionUrl} error={request.error} response={responseText}");
+				throw new MobileApiException((long)request.responseCode, responseText, $"Portal initSession request failed: {request.error} {responseText}");
+			}
+
+			var response = JsonUtility.FromJson<InitSessionResponse>(responseText);
+			if (response == null || string.IsNullOrWhiteSpace(response.accessToken) || string.IsNullOrWhiteSpace(response.refreshToken))
+				throw new InvalidOperationException("Portal initSession response is invalid.");
+
+			var session = new MobileSession
+			{
+				AccessToken = response.accessToken,
+				RefreshToken = response.refreshToken,
+				PublicId = response.publicId,
+				Verified = response.verified
+			};
+
+			_currentSession = session;
+			_loggedIn = true;
+			_userData = new UserData
+			{
+				userId = response.publicId,
+				verified = response.verified
+			};
+
+			var tokenSet = await _tokenStore.LoadAsync() ?? new MobileTokenSet();
+			tokenSet.PortalToken = response.accessToken;
+			tokenSet.AccessToken = response.accessToken;
+			tokenSet.RefreshToken = response.refreshToken;
+			tokenSet.PublicId = response.publicId;
+			tokenSet.Verified = response.verified;
+			await _tokenStore.SaveAsync(tokenSet);
+
+			HAppsLog.Log($"Portal initSession updated: publicId={response.publicId}, verified={response.verified}, accessTokenLength={response.accessToken?.Length ?? 0}, refreshTokenLength={response.refreshToken?.Length ?? 0}");
+			return session;
+		}
+
+		private async Task<MobileSession> RefreshSessionInternalAsync(string refreshToken)
+		{
+			if (string.IsNullOrWhiteSpace(_options.RefreshSessionUrl))
+				throw new InvalidOperationException("Portal mobile refresh endpoint is not configured.");
+
+			var payload = new RefreshSessionRequest
+			{
+				refreshToken = refreshToken
+			};
+			var json = JsonUtility.ToJson(payload);
+
+			HAppsLog.Log($"Requesting portal refreshSession: url={_options.RefreshSessionUrl}");
+			HAppsLog.Log($"Portal refreshSession request body: {json}");
+			using var request = new UnityWebRequest(_options.RefreshSessionUrl, UnityWebRequest.kHttpVerbPOST);
+			request.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(json));
+			request.downloadHandler = new DownloadHandlerBuffer();
+			request.SetRequestHeader("Content-Type", "application/json");
+			request.SetRequestHeader("Accept", "application/json");
+
+			var operation = request.SendWebRequest();
+			await AwaitAsyncOperation(operation);
+
+			var responseText = request.downloadHandler.text;
+			HAppsLog.Log($"Portal refreshSession response: {responseText}");
+
+			if (request.result != UnityWebRequest.Result.Success)
+			{
+				HAppsLog.Error($"Portal refreshSession request failed: endpoint={_options.RefreshSessionUrl} error={request.error} response={responseText}");
+				throw new MobileApiException((long)request.responseCode, responseText, $"Portal refreshSession request failed: {request.error} {responseText}");
+			}
+
+			var response = JsonUtility.FromJson<RefreshSessionResponse>(responseText);
+			if (response == null || string.IsNullOrWhiteSpace(response.accessToken))
+				throw new InvalidOperationException("Portal refreshSession response is invalid.");
+
+			var session = new MobileSession
+			{
+				AccessToken = response.accessToken,
+				RefreshToken = refreshToken,
+				PublicId = response.publicId,
+				Verified = response.verified
+			};
+
+			_currentSession = session;
+			_loggedIn = true;
+			_userData = new UserData
+			{
+				userId = response.publicId,
+				verified = response.verified
+			};
+
+			var tokenSet = await _tokenStore.LoadAsync() ?? new MobileTokenSet();
+			tokenSet.PortalToken = response.accessToken;
+			tokenSet.AccessToken = response.accessToken;
+			tokenSet.RefreshToken = refreshToken;
+			tokenSet.PublicId = response.publicId;
+			tokenSet.Verified = response.verified;
+			await _tokenStore.SaveAsync(tokenSet);
+
+			HAppsLog.Log($"Portal refreshSession updated: publicId={response.publicId}, verified={response.verified}, accessTokenLength={response.accessToken?.Length ?? 0}");
+			return session;
+		}
+
 		private string BuildAuthorizeUrl(string authorizationEndpoint, string state, string nonce, string codeChallenge)
 		{
 			var query = new Dictionary<string, string>
@@ -169,6 +408,9 @@ namespace HAppsSDK
 				["state"] = state,
 				["nonce"] = nonce
 			};
+
+			if (!string.IsNullOrWhiteSpace(_currentSession?.PublicId))
+				query["linkId"] = _currentSession.PublicId;
 
 			return $"{authorizationEndpoint}?{ToQueryString(query)}";
 		}
@@ -229,7 +471,10 @@ namespace HAppsSDK
 				{
 					AccessToken = tokens.access_token,
 					IdToken = tokens.id_token,
-					RefreshToken = tokens.refresh_token
+					RefreshToken = tokens.refresh_token,
+					PortalToken = _currentSession?.AccessToken,
+					PublicId = _currentSession?.PublicId,
+					Verified = _currentSession?.Verified ?? false
 				});
 
 				_loggedIn = !string.IsNullOrEmpty(tokens.access_token);
@@ -309,6 +554,26 @@ namespace HAppsSDK
 			{
 				HAppsLog.Error($"GET request failed: {url} error={request.error}");
 				throw new InvalidOperationException($"GET request failed: {request.error}");
+			}
+
+			return request.downloadHandler.text;
+		}
+
+		private static async Task<string> SendAuthorizedJsonPostAsync(string url, string bearerToken, string json)
+		{
+			using var request = new UnityWebRequest(url, UnityWebRequest.kHttpVerbPOST);
+			request.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(json ?? "{}"));
+			request.downloadHandler = new DownloadHandlerBuffer();
+			request.SetRequestHeader("Content-Type", "application/json");
+			request.SetRequestHeader("Accept", "application/json");
+			request.SetRequestHeader("Authorization", $"Bearer {bearerToken}");
+			var operation = request.SendWebRequest();
+			await AwaitAsyncOperation(operation);
+
+			if (request.result != UnityWebRequest.Result.Success)
+			{
+				HAppsLog.Error($"Authorized POST request failed: {url} error={request.error} response={request.downloadHandler.text}");
+				throw new MobileApiException((long)request.responseCode, request.downloadHandler.text, $"POST request failed: {request.error} {request.downloadHandler.text}");
 			}
 
 			return request.downloadHandler.text;
@@ -431,6 +696,64 @@ namespace HAppsSDK
 			public string token_type;
 			public int expires_in;
 			public string scope;
+		}
+
+		[Serializable]
+		private sealed class InitSessionResponse
+		{
+			public string accessToken;
+			public string refreshToken;
+			public string publicId;
+			public bool verified;
+		}
+
+		[Serializable]
+		private sealed class InitSessionRequest
+		{
+			public string clientId;
+		}
+
+		[Serializable]
+		private sealed class RefreshSessionRequest
+		{
+			public string refreshToken;
+		}
+
+		[Serializable]
+		private sealed class RefreshSessionResponse
+		{
+			public string accessToken;
+			public string publicId;
+			public bool verified;
+		}
+
+		[Serializable]
+		private sealed class CreatePaymentPayload
+		{
+			public string productId;
+			public string price;
+			public string currency;
+			public string desc;
+			public string requestId;
+		}
+
+		[Serializable]
+		private sealed class CreatePaymentResponse
+		{
+			public string orderId;
+			public string paymentUrl;
+		}
+
+		private sealed class MobileApiException : Exception
+		{
+			public long StatusCode { get; }
+			public string ResponseBody { get; }
+
+			public MobileApiException(long statusCode, string responseBody, string message) : base(message)
+			{
+				StatusCode = statusCode;
+				ResponseBody = responseBody ?? string.Empty;
+			}
 		}
 
 	}

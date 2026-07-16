@@ -5,5 +5,8 @@ namespace HAppsSDK
 		public string AccessToken;
 		public string IdToken;
 		public string RefreshToken;
+		public string PortalToken;
+		public string PublicId;
+		public bool Verified;
 	}
 }
