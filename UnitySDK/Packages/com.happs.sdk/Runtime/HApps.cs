@@ -35,11 +35,20 @@ namespace HAppsSDK
 		public static Task<bool> OpenPortalAuthPopup()
 			=> Provider.OpenPortalAuthPopup();
 
+		public static void OpenAgeVerification(bool adultMode = true)
+			=> Provider.OpenAgeVerification(adultMode);
+
+		public static void SetTheaterMode(bool enabled)
+			=> Provider.SetTheaterMode(enabled);
+
 		public static bool IsPortalSite()
 			=> Provider.IsPortalSite();
 
 		public static bool IsReady()
 			=> HAppsJSBridge.IsReady();
+
+		public static void SetDebugLogging(bool enabled)
+			=> HAppsLog.SetDebugEnabled(enabled);
 
 		public static void Shutdown()
 		{

@@ -22,6 +22,8 @@ namespace HAppsSDK
 		public abstract Task<PaymentData> MakePayment(string orderId);
 		public abstract Task<AuthPopupData> OpenIdpAuthPopup(string url);
 		public abstract Task<bool> OpenPortalAuthPopup();
+		public abstract void OpenAgeVerification(bool adultMode = true);
+		public abstract void SetTheaterMode(bool enabled);
 		
 		public virtual bool IsPortalSite() => false;
 
@@ -170,5 +172,17 @@ namespace HAppsSDK
 	public class OpenAuthPopupRequest
 	{
 		public string url;
+	}
+
+	[Serializable]
+	public class OpenAgeVerificationRequest
+	{
+		public bool adultMode = true;
+	}
+
+	[Serializable]
+	public class SetTheaterModeRequest
+	{
+		public bool enabled;
 	}
 }

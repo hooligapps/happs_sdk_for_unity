@@ -9,7 +9,7 @@ Add the package to your Unity project through `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v2.0.5"
+    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v2.0.6"
   }
 }
 ```
@@ -33,6 +33,9 @@ Task<UserData> HApps.GetProfile()
 Task<PaymentData> HApps.MakePayment(string orderId)
 Task<AuthPopupData> HApps.OpenIdpAuthPopup(string url)
 Task<bool> HApps.OpenPortalAuthPopup()
+void HApps.OpenAgeVerification(bool adultMode = true)
+void HApps.SetTheaterMode(bool enabled)
+void HApps.SetDebugLogging(bool enabled)
 event Action<UserData, SignatureData> HApps.AuthCompleted
 bool HApps.IsPortalSite()
 bool HApps.IsReady()

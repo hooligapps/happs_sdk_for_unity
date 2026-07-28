@@ -9,12 +9,12 @@ Add the package to your Unity project through `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v2.0.5"
+    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v2.0.6"
   }
 }
 ```
 
-Use a release tag such as `v2.0.5`. During development you can temporarily point to a commit hash instead of a tag.
+Use a release tag such as `v2.0.6`. During development you can temporarily point to a commit hash instead of a tag.
 
 ## Runtime API
 
@@ -24,6 +24,9 @@ Task<UserData> HApps.GetProfile()
 Task<PaymentData> HApps.MakePayment(string orderId)
 Task<AuthPopupData> HApps.OpenIdpAuthPopup(string url)
 Task<bool> HApps.OpenPortalAuthPopup()
+void HApps.OpenAgeVerification(bool adultMode = true)
+void HApps.SetTheaterMode(bool enabled)
+void HApps.SetDebugLogging(bool enabled)
 event Action<UserData, SignatureData> HApps.AuthCompleted
 bool HApps.IsPortalSite()
 bool HApps.IsReady()
@@ -54,6 +57,8 @@ Embedded portal flow:
 - call `Connect()` to receive platform context and store portal signature in `HApps.Provider.Signature`
 - use that signature in your backend auth flow to resolve the user/session
 - call `OpenPortalAuthPopup()` when you need to show portal login UI from the game
+- call `OpenAgeVerification()` when you need to show portal age verification UI from the game
+- call `SetTheaterMode(true/false)` when you need to toggle portal theater mode from the game
 - subscribe to `AuthCompleted` if you need to react to external `auth_complete` messages without awaiting `OpenPortalAuthPopup()`
 - after portal auth, your backend can use the refreshed signature if that flow needs server-side auth resolution
 - call `GetProfile()` when needed
@@ -87,4 +92,6 @@ private void HandleAuthCompleted(UserData user, SignatureData signature)
 - `AuthPopupData` supports both ticket-based and cookie-based session auth
 - `Connect()` and `OpenPortalAuthPopup()` are separate steps in embedded portal auth
 - `Connect()` stores the current portal signature in `HApps.Provider.Signature`
+- `OpenAgeVerification()` and `SetTheaterMode()` are fire-and-forget bridge calls with no completion callback
+- `SetDebugLogging(false)` disables SDK debug/warn logs; errors still log
 - sample scene/scripts remain in the host project, not in the package

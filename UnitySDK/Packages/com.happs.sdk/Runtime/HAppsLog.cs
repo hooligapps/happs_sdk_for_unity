@@ -6,6 +6,11 @@ namespace HAppsSDK
 	{
 		public static bool EnableDebug = true;
 
+		public static void SetDebugEnabled(bool enabled)
+		{
+			EnableDebug = enabled;
+		}
+
 		public static void Log(string msg)
 		{
 			if (!EnableDebug) return;

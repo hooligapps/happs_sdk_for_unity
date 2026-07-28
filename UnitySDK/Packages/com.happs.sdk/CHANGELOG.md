@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.0.6
+
+- Add `HApps.OpenAgeVerification(bool adultMode = true)` for portal age verification UI
+- Add `HApps.SetTheaterMode(bool enabled)` for portal theater mode toggle
+- Add `HApps.SetDebugLogging(bool enabled)` for toggling SDK debug and warning logs
+
 ## 2.0.5
 
 - Add `HApps.AuthCompleted` event for subscribing to incoming `auth_complete`
