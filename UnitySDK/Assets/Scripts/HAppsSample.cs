@@ -14,6 +14,8 @@ public sealed class HAppsSample : MonoBehaviour
 
     [Header("Debug UI")]
     [SerializeField] private bool showDebugGui = true;
+    [SerializeField] private bool adultMode = true;
+    [SerializeField] private bool theaterModeEnabled = true;
 
     private string _lastStatus = "Idle";
     private GUIStyle _titleStyle;
@@ -114,6 +116,18 @@ public sealed class HAppsSample : MonoBehaviour
         LogStatus("SDK shutdown");
     }
 
+    public void ShowAgeVerification()
+    {
+        HApps.Web.OpenAgeVerification(adultMode);
+        LogStatus($"Age verification requested: adultMode={adultMode}");
+    }
+
+    public void ApplyTheaterMode()
+    {
+        HApps.Web.SetTheaterMode(theaterModeEnabled);
+        LogStatus($"Theater mode requested: enabled={theaterModeEnabled}");
+    }
+
     private void OnGUI()
     {
         if (!showDebugGui)
@@ -145,6 +159,14 @@ public sealed class HAppsSample : MonoBehaviour
 
         if (GUILayout.Button("Request Profile", GUILayout.Height(lineHeight)))
             RequestProfile();
+
+        adultMode = GUILayout.Toggle(adultMode, "Adult mode");
+        if (GUILayout.Button("Show Age Verification", GUILayout.Height(lineHeight)))
+            ShowAgeVerification();
+
+        theaterModeEnabled = GUILayout.Toggle(theaterModeEnabled, "Theater mode enabled");
+        if (GUILayout.Button("Apply Theater Mode", GUILayout.Height(lineHeight)))
+            ApplyTheaterMode();
 
         GUILayout.Space(gap);
         GUILayout.Label("Standalone Flow", GetSectionStyle());

@@ -95,6 +95,46 @@ namespace HAppsSDK
                 null);
         }
 
+        public override void OpenAgeVerification(bool adultMode = true)
+        {
+            var json = JsonUtility.ToJson(new OpenAgeVerificationRequest
+            {
+                adultMode = adultMode
+            });
+
+            _bridge.SendMessage("open_age_verification", json);
+        }
+
+        public override void SetTheaterMode(bool enabled)
+        {
+            var json = JsonUtility.ToJson(new SetTheaterModeRequest
+            {
+                enabled = enabled
+            });
+
+            _bridge.SendMessage("set_theater_mode", json);
+        }
+
+        public override void OpenAgeVerification(bool adultMode = true)
+        {
+            var json = JsonUtility.ToJson(new OpenAgeVerificationRequest
+            {
+                adultMode = adultMode
+            });
+
+            _bridge.SendMessage("open_age_verification", json);
+        }
+
+        public override void SetTheaterMode(bool enabled)
+        {
+            var json = JsonUtility.ToJson(new SetTheaterModeRequest
+            {
+                enabled = enabled
+            });
+
+            _bridge.SendMessage("set_theater_mode", json);
+        }
+
         public override void Dispose()
         {
             HAppsLog.Log("Provider dispose");
@@ -232,6 +272,18 @@ namespace HAppsSDK
 
             RaiseAuthCompleted(user, signature);
             Complete(OperationType.OpenPortalAuth, !string.IsNullOrEmpty(sig));
+        }
+
+        [Serializable]
+        private sealed class OpenAgeVerificationRequest
+        {
+            public bool adultMode = true;
+        }
+
+        [Serializable]
+        private sealed class SetTheaterModeRequest
+        {
+            public bool enabled;
         }
     }
 }

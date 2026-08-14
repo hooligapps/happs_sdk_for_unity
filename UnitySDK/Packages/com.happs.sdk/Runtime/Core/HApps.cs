@@ -11,6 +11,9 @@ namespace HAppsSDK
 		public static HAppsMobileProvider Mobile =>
 			_mobile ??= new HAppsMobileProvider();
 
+		public static void SetDebugLogging(bool enabled)
+			=> HAppsLog.SetDebugEnabled(enabled);
+
 		public static void ConfigureMobile(HAppsMobileAuthOptions options, IMobileTokenStore tokenStore = null)
 			=> Mobile.Configure(options, tokenStore);
 

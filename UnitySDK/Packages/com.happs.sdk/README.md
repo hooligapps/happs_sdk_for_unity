@@ -24,6 +24,8 @@ Task<UserData> HApps.Web.GetProfile()
 Task<PaymentData> HApps.Web.MakePayment(string orderId)
 Task<AuthPopupData> HApps.Web.OpenIdpAuthPopup(string url)
 Task<bool> HApps.Web.OpenPortalAuthPopup()
+void HApps.Web.OpenAgeVerification(bool adultMode = true)
+void HApps.Web.SetTheaterMode(bool enabled)
 event Action<UserData, SignatureData> HApps.Web.AuthCompleted
 bool HApps.Web.IsPortalSite()
 bool HApps.Web.IsReady()
@@ -35,6 +37,7 @@ Task<MobileCreatePaymentResult> HApps.Mobile.CreatePaymentAsync(MobileCreatePaym
 Task HApps.Mobile.LogoutAsync()
 
 void HApps.ConfigureMobile(HAppsMobileAuthOptions options, IMobileTokenStore tokenStore = null)
+void HApps.SetDebugLogging(bool enabled)
 void HApps.Shutdown()
 ```
 
@@ -63,6 +66,8 @@ Embedded portal flow:
 - call `HApps.Web.Connect()` to receive platform context and current portal signature
 - send `HApps.Web.Signature` to your backend if you need server-side user resolution
 - call `HApps.Web.OpenPortalAuthPopup()` when the game must show portal login UI
+- call `HApps.Web.OpenAgeVerification()` when the game must show portal age verification UI
+- call `HApps.Web.SetTheaterMode(true/false)` when the game must toggle portal theater mode
 - subscribe to `HApps.Web.AuthCompleted` if auth can complete outside the awaited popup flow
 
 Example subscription:
@@ -150,7 +155,10 @@ Notes:
 - `IsPortalSite()` depends on `window.HApps.isPortal()`
 - `IsReady()` depends on `window.HApps.isReady()`
 - `OpenIdpAuthPopup(url)` returns `AuthPopupData`, not plain `string`
+- `AuthPopupData` supports both ticket-based and cookie-based session auth
 - `Connect()` and `OpenPortalAuthPopup()` are separate steps
+- `OpenAgeVerification()` and `SetTheaterMode()` are fire-and-forget bridge calls with no completion callback
+- `SetDebugLogging(false)` disables SDK debug/warn logs; errors still log
 - `MakePayment()` accepts a backend-created `orderId`
 - mobile `GetProfile()` and mobile `MakePayment(orderId)` are not part of the current native flow
 - sample scene/scripts remain in the host project, not in the package

@@ -33,6 +33,8 @@ Task<UserData> HApps.Web.GetProfile()
 Task<PaymentData> HApps.Web.MakePayment(string orderId)
 Task<AuthPopupData> HApps.Web.OpenIdpAuthPopup(string url)
 Task<bool> HApps.Web.OpenPortalAuthPopup()
+void HApps.Web.OpenAgeVerification(bool adultMode = true)
+void HApps.Web.SetTheaterMode(bool enabled)
 event Action<UserData, SignatureData> HApps.Web.AuthCompleted
 bool HApps.Web.IsPortalSite()
 bool HApps.Web.IsReady()
@@ -43,7 +45,7 @@ Task<MobileSession> HApps.Mobile.RefreshSessionAsync()
 Task<MobileCreatePaymentResult> HApps.Mobile.CreatePaymentAsync(MobileCreatePaymentRequest request)
 Task HApps.Mobile.LogoutAsync()
 void HApps.ConfigureMobile(HAppsMobileAuthOptions options, IMobileTokenStore tokenStore = null)
-
+void HApps.SetDebugLogging(bool enabled)
 void HApps.Shutdown()
 ```
 
@@ -54,9 +56,12 @@ Method semantics:
 - `HApps.Web.MakePayment(orderId)` starts a payment flow for an already created backend order.
 - `HApps.Web.OpenIdpAuthPopup(url)` opens standalone backend auth popup and returns `AuthPopupData` for either ticket-based or cookie-based session auth.
 - `HApps.Web.OpenPortalAuthPopup()` opens portal-managed auth UI and returns `true` when portal auth completes successfully.
+- `HApps.Web.OpenAgeVerification(adultMode)` opens portal-managed age verification UI from the game.
+- `HApps.Web.SetTheaterMode(enabled)` toggles portal theater mode from the game.
 - `HApps.Web.AuthCompleted` fires when the external page script sends `auth_complete`, even if you are not awaiting `OpenPortalAuthPopup()`.
 - `HApps.Web.IsPortalSite()` reflects `window.HApps.isPortal()` from the JS environment.
 - `HApps.Web.IsReady()` reflects `window.HApps.isReady()` from the JS environment.
+- `HApps.SetDebugLogging(enabled)` toggles SDK debug and warning logs. Errors still log.
 - `HApps.Mobile` is the native/mobile branch for portal session bootstrap, OIDC login, and mobile payment creation.
 - `Shutdown()` disposes the current provider instance.
 

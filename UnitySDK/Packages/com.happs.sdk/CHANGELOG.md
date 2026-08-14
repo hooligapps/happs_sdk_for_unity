@@ -5,6 +5,9 @@
 - Remove flat Web shortcuts from `HApps`; use `HApps.Web.*` explicitly
 - Replace `HApps.Provider.Signature` with `HApps.Web.Signature`
 - Document the current mobile session, login, logout, and payment flows
+- Add `HApps.Web.OpenAgeVerification(bool adultMode = true)` for portal age verification UI
+- Add `HApps.Web.SetTheaterMode(bool enabled)` for portal theater mode toggle
+- Add `HApps.SetDebugLogging(bool enabled)` for toggling SDK debug and warning logs
 
 ## 2.0.5
 
