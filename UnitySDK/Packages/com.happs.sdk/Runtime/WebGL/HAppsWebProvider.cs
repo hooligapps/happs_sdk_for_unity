@@ -46,7 +46,7 @@ namespace HAppsSDK
             HAppsLog.Log("Provider created");
         }
 
-        public Task<bool> Connect()
+        public override Task<bool> Connect()
         {
             return StartOperation<bool>(
                 OperationType.Connect,
@@ -75,7 +75,7 @@ namespace HAppsSDK
                 null);
         }
 
-        public Task<AuthPopupData> OpenIdpAuthPopup(string url)
+        public override Task<AuthPopupData> OpenIdpAuthPopup(string url)
         {
             var json = JsonUtility.ToJson(new OpenAuthPopupRequest { url = url });
 
@@ -86,7 +86,7 @@ namespace HAppsSDK
                 null);
         }
 
-        public Task<bool> OpenPortalAuthPopup()
+        public override Task<bool> OpenPortalAuthPopup()
         {
             return StartOperation<bool>(
                 OperationType.OpenPortalAuth,
@@ -136,7 +136,7 @@ namespace HAppsSDK
             _operations.Clear();
         }
 
-        public bool IsPortalSite()
+        public override bool IsPortalSite()
         {
             return HAppsJSBridge.IsPortalSite();
         }

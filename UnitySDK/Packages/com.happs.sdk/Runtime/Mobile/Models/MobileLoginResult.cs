@@ -6,14 +6,14 @@ namespace HAppsSDK
 
 		public string AccessToken;
 		public string IdToken;
-		public string RefreshToken;
+		public string OidcAccessToken;
 		public string TokenType;
 		public int ExpiresIn;
 		public string Scope;
 		public string PublicId;
+		public string SocialId;
 		public bool Verified;
-		public string PortalAccessToken;
-		public string PortalRefreshToken;
+		public string DeviceId;
 
 		public string Code;
 		public string CodeVerifier;

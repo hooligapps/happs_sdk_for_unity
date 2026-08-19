@@ -8,9 +8,11 @@ public sealed class HAppsMobileSample : MonoBehaviour
 {
     [Header("Server Flow")]
     [SerializeField] private string clientId = "lustage-mobile";
+    [SerializeField] private string deviceRegisterEndpoint = "https://portal.igra.rocks/api/v1/mobile/device/register";
     [SerializeField] private string initSessionEndpoint = "https://portal.igra.rocks/api/v1/mobile/session/init";
-    [SerializeField] private string exchangeOidcSessionEndpoint = "https://portal.igra.rocks/api/v1/mobile/session/exchange-oidc";
-    [SerializeField] private string refreshSessionEndpoint = "https://portal.igra.rocks/api/v1/mobile/session/refresh";
+    [SerializeField] private string oidcStartEndpoint = "https://portal.igra.rocks/api/v1/mobile/oidc/start";
+    [SerializeField] private string oidcExchangeEndpoint = "https://portal.igra.rocks/api/v1/mobile/oidc/exchange";
+    [SerializeField] private string oidcLogoutEndpoint = "https://portal.igra.rocks/api/v1/mobile/oidc/logout";
     [SerializeField] private string createPaymentEndpoint = "https://portal.igra.rocks/api/v1/mobile/payments";
 
     [Header("Payment Test Data")]
@@ -41,6 +43,7 @@ public sealed class HAppsMobileSample : MonoBehaviour
     private string _lastOrderId;
     private bool _isLoggedIn;
     private string _socialId = "-";
+    private bool _isLoginInFlight;
 
     private void OnEnable()
     {
@@ -79,15 +82,21 @@ public sealed class HAppsMobileSample : MonoBehaviour
                 RedirectUri = "com.hooligapps.lustage://auth/callback",
                 PostLogoutRedirectUri = "com.hooligapps.lustage://logout",
                 Scope = "openid email offline_access",
+                DeviceRegisterUrl = deviceRegisterEndpoint,
                 InitSessionUrl = initSessionEndpoint,
-                ExchangeOidcSessionUrl = exchangeOidcSessionEndpoint,
-                RefreshSessionUrl = refreshSessionEndpoint,
+                OidcStartUrl = oidcStartEndpoint,
+                OidcExchangeUrl = oidcExchangeEndpoint,
+                OidcLogoutUrl = oidcLogoutEndpoint,
                 CreatePaymentUrl = createPaymentEndpoint
             });
 
             _isConfigured = true;
             LogStatus($"Configured locally: {clientId}");
+#if UNITY_ANDROID && !UNITY_EDITOR
             StartInitSession();
+#else
+            LogStatus("Mobile device flow is Android-only. Build and run on an Android device.");
+#endif
         }
         catch (Exception ex)
         {
@@ -100,7 +109,11 @@ public sealed class HAppsMobileSample : MonoBehaviour
         if (!EnsureConfigured())
             return;
 
+        if (_isLoginInFlight)
+            return;
+
         ResetScrollInteraction();
+        _isLoginInFlight = true;
         try
         {
             AddLogSeparator("LOGIN");
@@ -113,12 +126,16 @@ public sealed class HAppsMobileSample : MonoBehaviour
             }
 
             _isLoggedIn = true;
-            _socialId = ExtractSubjectFromIdToken(result.IdToken) ?? "-";
-            LogStatus($"Login callback received: oidcAccessTokenLength={result.AccessToken?.Length ?? 0}, oidcRefreshTokenLength={result.RefreshToken?.Length ?? 0}, scope={result.Scope}, publicId={result.PublicId}, verified={result.Verified}, portalAccessTokenLength={result.PortalAccessToken?.Length ?? 0}, portalRefreshTokenLength={result.PortalRefreshToken?.Length ?? 0}");
+            _socialId = result.SocialId ?? "-";
+            LogStatus($"Login callback received: deviceId={result.DeviceId}, socialId={result.SocialId}, publicId={result.PublicId}, verified={result.Verified}, portalAccessTokenLength={result.AccessToken?.Length ?? 0}, oidcAccessTokenLength={result.OidcAccessToken?.Length ?? 0}, scope={result.Scope}");
         }
         catch (Exception ex)
         {
             LogError($"Login failed: {ex}");
+        }
+        finally
+        {
+            _isLoginInFlight = false;
         }
     }
 
@@ -134,7 +151,9 @@ public sealed class HAppsMobileSample : MonoBehaviour
             AddLogSeparator("INIT SESSION");
             LogStatus("Starting initSession");
             var session = await HApps.Mobile.InitSessionAsync();
-            LogStatus($"initSession: publicId={session.PublicId}, verified={session.Verified}, accessTokenLength={session.AccessToken?.Length ?? 0}, refreshTokenLength={session.RefreshToken?.Length ?? 0}");
+            _isLoggedIn = session.IsAuthorized;
+            _socialId = HApps.Mobile.CurrentUser?.userName ?? "-";
+            LogStatus($"initSession: deviceId={session.DeviceId}, publicId={session.PublicId}, verified={session.Verified}, isAuthorized={session.IsAuthorized}, accessTokenLength={session.AccessToken?.Length ?? 0}, expiresAt={session.AccessTokenExpiresAtUtc}");
         }
         catch (Exception ex)
         {
@@ -154,14 +173,16 @@ public sealed class HAppsMobileSample : MonoBehaviour
         ResetScrollInteraction();
         try
         {
-            AddLogSeparator("REFRESH SESSION");
-            LogStatus("Starting refreshSession");
+            AddLogSeparator("RE-INIT SESSION");
+            LogStatus("Starting re-init session");
             var session = await HApps.Mobile.RefreshSessionAsync();
-            LogStatus($"refreshSession: publicId={session.PublicId}, verified={session.Verified}, accessTokenLength={session.AccessToken?.Length ?? 0}, refreshTokenLength={session.RefreshToken?.Length ?? 0}");
+            _isLoggedIn = session.IsAuthorized;
+            _socialId = HApps.Mobile.CurrentUser?.userName ?? "-";
+            LogStatus($"re-init session: deviceId={session.DeviceId}, publicId={session.PublicId}, verified={session.Verified}, isAuthorized={session.IsAuthorized}, accessTokenLength={session.AccessToken?.Length ?? 0}, expiresAt={session.AccessTokenExpiresAtUtc}");
         }
         catch (Exception ex)
         {
-            LogError($"refreshSession failed: {ex}");
+            LogError($"re-init session failed: {ex}");
         }
     }
 
@@ -203,6 +224,9 @@ public sealed class HAppsMobileSample : MonoBehaviour
     public async void Logout()
     {
         if (!EnsureConfigured())
+            return;
+
+        if (_isLoginInFlight)
             return;
 
         ResetScrollInteraction();
@@ -279,9 +303,18 @@ public sealed class HAppsMobileSample : MonoBehaviour
         }
         else
         {
-            DrawButtonRow(lineHeight,
-                ("Login", Login),
-                ("Create Payment", CreatePayment));
+            if (_isLoginInFlight)
+            {
+                DrawButtonRow(lineHeight,
+                    ("Logging In...", null),
+                    ("Create Payment", CreatePayment));
+            }
+            else
+            {
+                DrawButtonRow(lineHeight,
+                    ("Login", Login),
+                    ("Create Payment", CreatePayment));
+            }
         }
 
         if (GUILayout.Button("Clear Log", GetButtonStyle(), GUILayout.Height(lineHeight)))
@@ -352,11 +385,15 @@ public sealed class HAppsMobileSample : MonoBehaviour
     {
         GUILayout.BeginHorizontal();
 
+        GUI.enabled = left.action != null;
         if (GUILayout.Button(left.label, GetButtonStyle(), GUILayout.Height(lineHeight), GUILayout.ExpandWidth(true)))
             left.action?.Invoke();
 
+        GUI.enabled = right.action != null;
         if (GUILayout.Button(right.label, GetButtonStyle(), GUILayout.Height(lineHeight), GUILayout.ExpandWidth(true)))
             right.action?.Invoke();
+
+        GUI.enabled = true;
 
         GUILayout.EndHorizontal();
     }

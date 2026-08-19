@@ -7,10 +7,13 @@ namespace HAppsSDK
 		public string RedirectUri;
 		public string PostLogoutRedirectUri;
 		public string Scope;
+		public string DeviceRegisterUrl;
 		public string InitSessionUrl;
-		public string ExchangeOidcSessionUrl;
-		public string RefreshSessionUrl;
+		public string OidcStartUrl;
+		public string OidcExchangeUrl;
+		public string OidcLogoutUrl;
 		public string CreatePaymentUrl;
 		public int LoginTimeoutMs = 180000;
+		public string PlayerPrefsStorageKey = "happs.mobile.state.v1";
 	}
 }

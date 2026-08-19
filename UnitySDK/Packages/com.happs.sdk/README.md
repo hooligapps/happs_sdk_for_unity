@@ -108,9 +108,11 @@ HApps.ConfigureMobile(new HAppsMobileAuthOptions
     RedirectUri = "com.example.game://auth/callback",
     PostLogoutRedirectUri = "com.example.game://logout",
     Scope = "openid email offline_access",
+    DeviceRegisterUrl = "https://portal.igra.rocks/api/v1/mobile/device/register",
     InitSessionUrl = "https://portal.igra.rocks/api/v1/mobile/session/init",
-    ExchangeOidcSessionUrl = "https://portal.igra.rocks/api/v1/mobile/session/exchange-oidc",
-    RefreshSessionUrl = "https://portal.igra.rocks/api/v1/mobile/session/refresh",
+    OidcStartUrl = "https://portal.igra.rocks/api/v1/mobile/oidc/start",
+    OidcExchangeUrl = "https://portal.igra.rocks/api/v1/mobile/oidc/exchange",
+    OidcLogoutUrl = "https://portal.igra.rocks/api/v1/mobile/oidc/logout",
     CreatePaymentUrl = "https://portal.igra.rocks/api/v1/mobile/payments"
 });
 ```
@@ -142,14 +144,12 @@ var payment = await HApps.Mobile.CreatePaymentAsync(new MobileCreatePaymentReque
 
 Notes:
 
-- `InitSessionAsync()` returns portal `publicId`, portal access token, refresh token, and `verified`
-- `LoginAsync()` starts OIDC login in the system browser, then calls `session/exchange-oidc` with the returned `id_token`
-- after `exchange-oidc`, the SDK switches to the new account-linked mobile session and stops using the old anonymous session
-- `BuildAuthorizeUrl` includes `link_id=publicId` when a portal session already exists
+- `InitSessionAsync()` ensures a device keypair exists, registers the device if needed, then calls signed `session/init`
+- `LoginAsync()` starts OIDC login through `oidc/start`, exchanges the authorization `code`, then calls `oidc/exchange` and a fresh `session/init`
+- after `oidc/exchange`, the SDK switches the device to the new account-linked mobile session
 - `CreatePaymentAsync()` sends the current portal access token in `Authorization: Bearer ...`
-- on `401 invalid_mobile_session` the SDK tries `RefreshSessionAsync()`
-- on `401 invalid_mobile_refresh` the SDK falls back to `InitSessionAsync()`
-- `LogoutAsync()` clears local mobile tokens and immediately requests a fresh anonymous portal session
+- on `401 invalid_mobile_session` or `401 mobile_session_expired` the SDK retries through `InitSessionAsync()`
+- `LogoutAsync()` calls `oidc/logout`, opens the returned logout URL, and clears local mobile device state
 - `CreatePaymentAsync()` opens the returned `paymentUrl`, but does not verify final payment status
 
 ## Notes
