@@ -4,7 +4,7 @@ namespace HAppsSDK
 {
 	internal static class HAppsLog
 	{
-		public static bool EnableDebug = true;
+		public static bool EnableDebug = false;
 
 		public static void SetDebugEnabled(bool enabled)
 		{

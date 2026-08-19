@@ -1,5 +1,19 @@
 # Changelog
 
+## 3.0.1
+
+- Require HApps JS SDK 1.0.4
+- Complete WebGL payment failures without waiting indefinitely
+- Add typed profile and bridge errors
+- Add timeouts to interactive WebGL operations
+- Dispose the WebGL bridge object and reject operations after shutdown
+- Disable debug logging by default and redact authentication secrets from logs
+- Store Android mobile tokens with AES-GCM using an Android Keystore-backed key
+- Mark plaintext PlayerPrefs token storage as unsafe legacy behavior
+- Add a configurable timeout to every mobile HTTP request
+- Always clear local credentials during logout, including remote logout failures
+- Require an exact mobile redirect endpoint match before accepting an OIDC callback
+
 ## 3.0.0
 
 - Remove flat Web shortcuts from `HApps`; use `HApps.Web.*` explicitly

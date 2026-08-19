@@ -13,6 +13,7 @@ namespace HAppsSDK
 		public string OidcExchangeUrl;
 		public string OidcLogoutUrl;
 		public string CreatePaymentUrl;
+		public int HttpTimeoutSeconds = 30;
 		public int LoginTimeoutMs = 180000;
 		public string PlayerPrefsStorageKey = "happs.mobile.state.v1";
 	}

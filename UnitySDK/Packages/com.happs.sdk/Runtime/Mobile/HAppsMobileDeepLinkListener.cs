@@ -23,7 +23,7 @@ namespace HAppsSDK
 
 		private void HandleDeepLinkActivated(string url)
 		{
-			HAppsLog.Log($"Mobile deep link: {url}");
+			HAppsLog.Log("Mobile deep link received");
 			DeepLinkReceived?.Invoke(url);
 		}
 	}

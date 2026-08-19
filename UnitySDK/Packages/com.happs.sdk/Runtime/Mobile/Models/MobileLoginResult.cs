@@ -15,8 +15,6 @@ namespace HAppsSDK
 		public bool Verified;
 		public string DeviceId;
 
-		public string Code;
-		public string CodeVerifier;
 		public string RedirectUri;
 		public string Error;
 	}

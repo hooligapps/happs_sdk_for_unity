@@ -8,7 +8,7 @@ namespace HAppsSDK
 {
     public sealed class HAppsWebProvider : HAppsProvider
     {
-        public const string Version = "1.0.0";
+        public const string Version = "3.0.1";
 
         public event Action<UserData, SignatureData> AuthCompleted;
         public string Signature { get; private set; }
@@ -24,8 +24,10 @@ namespace HAppsSDK
         }
 
         private const int DEFAULT_TIMEOUT_MS = 30000;
+        private const int INTERACTIVE_TIMEOUT_MS = 180000;
 
         private readonly HAppsJSBridge _bridge;
+        private bool _disposed;
 
         private readonly Dictionary<OperationType, OperationBase> _operations
             = new();
@@ -33,15 +35,18 @@ namespace HAppsSDK
         public HAppsWebProvider()
         {
             var go = new GameObject("HAppsJSBridge");
-            UnityEngine.Object.DontDestroyOnLoad(go);
+            if (Application.isPlaying)
+                UnityEngine.Object.DontDestroyOnLoad(go);
 
             _bridge = go.AddComponent<HAppsJSBridge>();
 
             _bridge.OnConnected += HandleConnected;
             _bridge.OnProfile += HandleProfile;
+            _bridge.OnPaymentCreated += HandlePaymentCreated;
             _bridge.OnPaymentCompleted += HandlePaymentCompleted;
             _bridge.OnAuthPopupCompleted += HandleAuthPopupCompleted;
             _bridge.OnPortalAuthCompleted += HandlePortalAuthCompleted;
+            _bridge.OnError += HandleError;
 
             HAppsLog.Log("Provider created");
         }
@@ -72,7 +77,7 @@ namespace HAppsSDK
                 OperationType.MakePayment,
                 () => _bridge.SendMessage("open_payment", json),
                 false,
-                null);
+                INTERACTIVE_TIMEOUT_MS);
         }
 
         public override Task<AuthPopupData> OpenIdpAuthPopup(string url)
@@ -83,7 +88,7 @@ namespace HAppsSDK
                 OperationType.OpenAuthPopup,
                 () => _bridge.SendMessage("popup_auth", json),
                 true,
-                null);
+                INTERACTIVE_TIMEOUT_MS);
         }
 
         public override Task<bool> OpenPortalAuthPopup()
@@ -92,7 +97,7 @@ namespace HAppsSDK
                 OperationType.OpenPortalAuth,
                 () => _bridge.SendMessage("portal_auth", "{}"),
                 true,
-                null);
+                INTERACTIVE_TIMEOUT_MS);
         }
 
         public override void OpenAgeVerification(bool adultMode = true)
@@ -117,15 +122,21 @@ namespace HAppsSDK
 
         public override void Dispose()
         {
+            if (_disposed)
+                return;
+
+            _disposed = true;
             HAppsLog.Log("Provider dispose");
 
             if (_bridge != null)
             {
                 _bridge.OnConnected -= HandleConnected;
                 _bridge.OnProfile -= HandleProfile;
+                _bridge.OnPaymentCreated -= HandlePaymentCreated;
                 _bridge.OnPaymentCompleted -= HandlePaymentCompleted;
                 _bridge.OnAuthPopupCompleted -= HandleAuthPopupCompleted;
                 _bridge.OnPortalAuthCompleted -= HandlePortalAuthCompleted;
+                _bridge.OnError -= HandleError;
             }
 
             var ex = new ObjectDisposedException("HAppsSDK");
@@ -134,6 +145,14 @@ namespace HAppsSDK
                 op.Fail(ex);
 
             _operations.Clear();
+
+            if (_bridge != null)
+            {
+                if (Application.isPlaying)
+                    UnityEngine.Object.Destroy(_bridge.gameObject);
+                else
+                    UnityEngine.Object.DestroyImmediate(_bridge.gameObject);
+            }
         }
 
         public override bool IsPortalSite()
@@ -153,6 +172,9 @@ namespace HAppsSDK
 
         private Task<T> StartOperation<T>(OperationType type, Action startAction, bool allowRestart, int? timeoutMs)
         {
+            if (_disposed)
+                throw new ObjectDisposedException(nameof(HAppsWebProvider));
+
             if (_operations.TryGetValue(type, out var existing))
             {
                 if (!allowRestart)
@@ -199,9 +221,17 @@ namespace HAppsSDK
 
             if (opBase is Operation<T> op)
             {
-                HAppsLog.Log($"Completed {type}: {result}");
+                HAppsLog.Log($"Completed {type}");
                 op.Complete(result);
             }
+        }
+
+        private void Fail(OperationType type, Exception error)
+        {
+            if (!_operations.Remove(type, out var operation))
+                return;
+
+            operation.Fail(error);
         }
 
         private void HandleConnected(InitData init, UserData user, SignatureData signature)
@@ -218,12 +248,30 @@ namespace HAppsSDK
             Complete(OperationType.Connect, IsInitialized);
         }
 
-        private void HandleProfile(UserData user)
+        private void HandleProfile(UserData user, HAppsErrorData error)
         {
+            if (error != null)
+            {
+                Fail(OperationType.GetProfile, new HAppsException(error));
+                return;
+            }
+
             _userData = user;
             _loggedIn = user != null;
 
             Complete(OperationType.GetProfile, user);
+        }
+
+        private void HandlePaymentCreated(PaymentData data)
+        {
+            if (data == null)
+            {
+                Fail(OperationType.MakePayment, new InvalidOperationException("Payment response is empty."));
+                return;
+            }
+
+            if (data.Status != PaymentStatus.Started)
+                Complete(OperationType.MakePayment, data);
         }
 
         private void HandlePaymentCompleted(PaymentData data)
@@ -252,6 +300,16 @@ namespace HAppsSDK
 
             RaiseAuthCompleted(user, signature);
             Complete(OperationType.OpenPortalAuth, !string.IsNullOrEmpty(sig));
+        }
+
+        private void HandleError(HAppsErrorData error)
+        {
+            var exception = new HAppsException(error);
+            var pending = new List<OperationBase>(_operations.Values);
+            _operations.Clear();
+
+            foreach (var operation in pending)
+                operation.Fail(exception);
         }
 
         [Serializable]

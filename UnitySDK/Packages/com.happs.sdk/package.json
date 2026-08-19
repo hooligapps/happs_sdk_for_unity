@@ -1,7 +1,7 @@
 {
   "name": "com.happs.sdk",
   "displayName": "HApps Unity SDK",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "description": "Unity SDK for HApps WebGL and mobile integrations.",
   "documentationUrl": "https://github.com/hooligapps/happs_sdk_for_unity/tree/main/UnitySDK/Packages/com.happs.sdk",
   "changelogUrl": "https://github.com/hooligapps/happs_sdk_for_unity/blob/main/UnitySDK/Packages/com.happs.sdk/CHANGELOG.md",

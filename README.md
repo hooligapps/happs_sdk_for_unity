@@ -9,7 +9,7 @@ Add the package to your Unity project through `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.0.0"
+    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.0.1"
   }
 }
 ```
@@ -61,7 +61,9 @@ Method semantics:
 - `HApps.Web.AuthCompleted` fires when the external page script sends `auth_complete`, even if you are not awaiting `OpenPortalAuthPopup()`.
 - `HApps.Web.IsPortalSite()` reflects `window.HApps.isPortal()` from the JS environment.
 - `HApps.Web.IsReady()` reflects `window.HApps.isReady()` from the JS environment.
-- `HApps.SetDebugLogging(enabled)` toggles SDK debug and warning logs. Errors still log.
+- Debug logging is disabled by default. `HApps.SetDebugLogging(enabled)` toggles sanitized debug and warning logs; errors always log.
+- Native mobile auth currently supports Android only. Its default token store encrypts data with an Android Keystore-backed AES-GCM key.
+- `PlayerPrefsMobileTokenStore` is retained only as an explicitly insecure legacy/dev option.
 - `HApps.Mobile` is the native/mobile branch for portal session bootstrap, OIDC login, and mobile payment creation.
 - `Shutdown()` disposes the current provider instance.
 
@@ -120,7 +122,7 @@ switch (authPopupData.Flow)
 ### Standalone WebGL Template Example
 
 ```html
-<script src="https://hooli.games/public/js/sdk/hooligapps.debug.js"></script>
+<script src="https://hooli.games/public/js/sdk/1.0.4/hooligapps.debug.js"></script>
 ```
 
 ```javascript
@@ -187,10 +189,10 @@ Choose one script variant:
 
 ```html
 <!-- Development -->
-<script src="https://hooli.games/public/js/sdk/hooligapps.debug.js"></script>
+<script src="https://hooli.games/public/js/sdk/1.0.4/hooligapps.debug.js"></script>
 
 <!-- Production -->
-<!-- <script src="https://hooli.games/public/js/sdk/hooligapps.js"></script> -->
+<!-- <script src="https://hooli.games/public/js/sdk/1.0.4/hooligapps.js"></script> -->
 ```
 
 ### Portal WebGL Template Example
@@ -198,7 +200,7 @@ Choose one script variant:
 Example portal page setup:
 
 ```html
-<script src="https://hooli.games/public/js/sdk/hooligapps.debug.js"></script>
+<script src="https://hooli.games/public/js/sdk/1.0.4/hooligapps.debug.js"></script>
 ```
 
 ```javascript
@@ -398,9 +400,12 @@ HApps.ConfigureMobile(new HAppsMobileAuthOptions
     OidcStartUrl = "https://portal.igra.rocks/api/v1/mobile/oidc/start",
     OidcExchangeUrl = "https://portal.igra.rocks/api/v1/mobile/oidc/exchange",
     OidcLogoutUrl = "https://portal.igra.rocks/api/v1/mobile/oidc/logout",
-    CreatePaymentUrl = "https://portal.igra.rocks/api/v1/mobile/payments"
+    CreatePaymentUrl = "https://portal.igra.rocks/api/v1/mobile/payments",
+    HttpTimeoutSeconds = 30
 });
 ```
+
+`HttpTimeoutSeconds` applies to every mobile API request. Logout always removes local credentials, even if the remote logout endpoint is unavailable.
 
 Recommended sequence:
 

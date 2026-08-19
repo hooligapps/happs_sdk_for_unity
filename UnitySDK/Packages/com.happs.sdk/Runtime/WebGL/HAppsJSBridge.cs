@@ -7,16 +7,15 @@ namespace HAppsSDK
     public sealed class HAppsJSBridge : MonoBehaviour
     {
         public event Action<InitData, UserData, SignatureData> OnConnected;
-        public event Action<UserData> OnProfile;
+        public event Action<UserData, HAppsErrorData> OnProfile;
         public event Action<PaymentData> OnPaymentCreated;
         public event Action<PaymentData> OnPaymentCompleted;
         public event Action<AuthPopupData> OnAuthPopupCompleted;
         public event Action<UserData, SignatureData> OnPortalAuthCompleted;
+        public event Action<HAppsErrorData> OnError;
 
         public void OnMessage(string json)
         {
-            HAppsLog.Log($"JS → {json}");
-
             if (string.IsNullOrEmpty(json))
             {
                 HAppsLog.Warn("Empty JS message");
@@ -50,7 +49,7 @@ namespace HAppsSDK
                     break;
 
                 case "profile":
-                    OnProfile?.Invoke(msg.userData);
+                    OnProfile?.Invoke(msg.userData, msg.error);
                     break;
 
                 case "payment":
@@ -67,6 +66,10 @@ namespace HAppsSDK
 
                 case "auth_complete":
                     OnPortalAuthCompleted?.Invoke(msg.userData, msg.signatureData);
+                    break;
+
+                case "error":
+                    OnError?.Invoke(msg.error);
                     break;
 
                 default:
@@ -96,7 +99,7 @@ namespace HAppsSDK
 
         public void SendMessage(string type, string payloadJson)
         {
-            HAppsLog.Log($"Unity → JS: {type} {payloadJson}");
+            HAppsLog.Log($"Unity → JS: {type}");
             _sendMessage(type, payloadJson);
         }
         

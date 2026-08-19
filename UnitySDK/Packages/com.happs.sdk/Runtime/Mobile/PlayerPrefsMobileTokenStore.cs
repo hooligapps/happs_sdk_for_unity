@@ -3,6 +3,7 @@ using UnityEngine;
 
 namespace HAppsSDK
 {
+	[System.Obsolete("PlayerPrefsMobileTokenStore stores tokens as plaintext. Use AndroidKeystoreMobileTokenStore or a secure custom IMobileTokenStore.")]
 	public sealed class PlayerPrefsMobileTokenStore : IMobileTokenStore
 	{
 		private readonly string _storageKey;
