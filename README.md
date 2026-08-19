@@ -394,6 +394,7 @@ HApps.ConfigureMobile(new HAppsMobileAuthOptions
     PostLogoutRedirectUri = "com.example.game://logout",
     Scope = "openid email offline_access",
     InitSessionUrl = "https://portal.igra.rocks/api/v1/mobile/session/init",
+    ExchangeOidcSessionUrl = "https://portal.igra.rocks/api/v1/mobile/session/exchange-oidc",
     RefreshSessionUrl = "https://portal.igra.rocks/api/v1/mobile/session/refresh",
     CreatePaymentUrl = "https://portal.igra.rocks/api/v1/mobile/payments"
 });
@@ -427,8 +428,9 @@ var payment = await HApps.Mobile.CreatePaymentAsync(new MobileCreatePaymentReque
 Mobile behavior:
 
 - `InitSessionAsync()` calls portal `session/init` and returns `publicId`, portal access token, refresh token, and `verified`
-- `LoginAsync()` runs OIDC Authorization Code + PKCE and returns OIDC tokens
-- if a portal session already exists, the SDK includes `linkId=publicId` in the OIDC authorize URL
+- `LoginAsync()` runs OIDC Authorization Code + PKCE, then calls `session/exchange-oidc` with the returned `id_token`
+- after `exchange-oidc`, the SDK switches to the new account-linked mobile session and stops using the old anonymous session
+- if a portal session already exists, the SDK includes `link_id=publicId` in the OIDC authorize URL
 - `CreatePaymentAsync()` sends the current portal access token in `Authorization: Bearer ...`
 - if payment creation returns `401 invalid_mobile_session`, the SDK tries `RefreshSessionAsync()`
 - if refresh returns `401 invalid_mobile_refresh`, the SDK falls back to `InitSessionAsync()`

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text;
 using HAppsSDK;
 using UnityEngine;
 
@@ -8,6 +9,7 @@ public sealed class HAppsMobileSample : MonoBehaviour
     [Header("Server Flow")]
     [SerializeField] private string clientId = "lustage-mobile";
     [SerializeField] private string initSessionEndpoint = "https://portal.igra.rocks/api/v1/mobile/session/init";
+    [SerializeField] private string exchangeOidcSessionEndpoint = "https://portal.igra.rocks/api/v1/mobile/session/exchange-oidc";
     [SerializeField] private string refreshSessionEndpoint = "https://portal.igra.rocks/api/v1/mobile/session/refresh";
     [SerializeField] private string createPaymentEndpoint = "https://portal.igra.rocks/api/v1/mobile/payments";
 
@@ -37,6 +39,8 @@ public sealed class HAppsMobileSample : MonoBehaviour
     private readonly List<string> _logLines = new();
     private const int MAX_LOG_LINES = 40;
     private string _lastOrderId;
+    private bool _isLoggedIn;
+    private string _socialId = "-";
 
     private void OnEnable()
     {
@@ -76,6 +80,7 @@ public sealed class HAppsMobileSample : MonoBehaviour
                 PostLogoutRedirectUri = "com.hooligapps.lustage://logout",
                 Scope = "openid email offline_access",
                 InitSessionUrl = initSessionEndpoint,
+                ExchangeOidcSessionUrl = exchangeOidcSessionEndpoint,
                 RefreshSessionUrl = refreshSessionEndpoint,
                 CreatePaymentUrl = createPaymentEndpoint
             });
@@ -107,7 +112,9 @@ public sealed class HAppsMobileSample : MonoBehaviour
                 return;
             }
 
-            LogStatus($"Login callback received: accessTokenLength={result.AccessToken?.Length ?? 0}, refreshTokenLength={result.RefreshToken?.Length ?? 0}, scope={result.Scope}");
+            _isLoggedIn = true;
+            _socialId = ExtractSubjectFromIdToken(result.IdToken) ?? "-";
+            LogStatus($"Login callback received: oidcAccessTokenLength={result.AccessToken?.Length ?? 0}, oidcRefreshTokenLength={result.RefreshToken?.Length ?? 0}, scope={result.Scope}, publicId={result.PublicId}, verified={result.Verified}, portalAccessTokenLength={result.PortalAccessToken?.Length ?? 0}, portalRefreshTokenLength={result.PortalRefreshToken?.Length ?? 0}");
         }
         catch (Exception ex)
         {
@@ -203,6 +210,8 @@ public sealed class HAppsMobileSample : MonoBehaviour
         {
             LogStatus("Starting logout");
             await HApps.Mobile.LogoutAsync();
+            _isLoggedIn = false;
+            _socialId = "-";
             LogStatus("Logout: done");
         }
         catch (Exception ex)
@@ -257,15 +266,23 @@ public sealed class HAppsMobileSample : MonoBehaviour
         GUILayout.BeginArea(new Rect(margin, margin, width, areaHeight), GUI.skin.box);
         GUILayout.Label("HApps Mobile Sample", GetTitleStyle());
         GUILayout.Space(gap);
+        GUILayout.Label($"Social ID: {_socialId}", GetStatusStyle());
+        GUILayout.Space(gap);
 
         GUILayout.Label("Portal Session Flow", GetSectionStyle());
 
-        DrawButtonRow(lineHeight,
-            ("Login", Login),
-            ("Create Payment", CreatePayment));
-
-        if (GUILayout.Button("Logout", GetButtonStyle(), GUILayout.Height(lineHeight)))
-            Logout();
+        if (_isLoggedIn)
+        {
+            DrawButtonRow(lineHeight,
+                ("Create Payment", CreatePayment),
+                ("Logout", Logout));
+        }
+        else
+        {
+            DrawButtonRow(lineHeight,
+                ("Login", Login),
+                ("Create Payment", CreatePayment));
+        }
 
         if (GUILayout.Button("Clear Log", GetButtonStyle(), GUILayout.Height(lineHeight)))
             ClearLog();
@@ -546,5 +563,47 @@ public sealed class HAppsMobileSample : MonoBehaviour
         };
 
         return _separatorStyle;
+    }
+
+    private static string ExtractSubjectFromIdToken(string idToken)
+    {
+        if (string.IsNullOrWhiteSpace(idToken))
+            return null;
+
+        var parts = idToken.Split('.');
+        if (parts.Length < 2 || string.IsNullOrWhiteSpace(parts[1]))
+            return null;
+
+        try
+        {
+            var json = Encoding.UTF8.GetString(DecodeBase64Url(parts[1]));
+            var payload = JsonUtility.FromJson<JwtPayload>(json);
+            return string.IsNullOrWhiteSpace(payload?.sub) ? null : payload.sub;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static byte[] DecodeBase64Url(string value)
+    {
+        var normalized = value.Replace('-', '+').Replace('_', '/');
+        var padding = normalized.Length % 4;
+
+        if (padding == 2)
+            normalized += "==";
+        else if (padding == 3)
+            normalized += "=";
+        else if (padding != 0)
+            throw new FormatException("Invalid base64url payload length.");
+
+        return Convert.FromBase64String(normalized);
+    }
+
+    [Serializable]
+    private sealed class JwtPayload
+    {
+        public string sub;
     }
 }
