@@ -45,8 +45,8 @@ void HApps.Shutdown()
 
 Your WebGL page must:
 
-- load `https://hooli.games/public/js/sdk/1.0.4/hooligapps.js` or `https://hooli.games/public/js/sdk/1.0.4/hooligapps.debug.js`
-- use JS SDK `1.0.4`; older and unversioned builds are not supported by Unity SDK `3.0.1`
+- load `https://hooli.games/public/js/sdk/1.0.3/hooligapps.js` or `https://hooli.games/public/js/sdk/1.0.3/hooligapps.debug.js`
+- use the existing JS SDK `1.0.3` contract; unversioned builds are not supported by Unity SDK `3.0.1`
 - initialize the browser bridge with `HApps.init(...)`
 - use `unityObjectName: "HAppsJSBridge"`
 - use `unityMethodName: "OnMessage"`

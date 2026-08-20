@@ -12,7 +12,6 @@ namespace HAppsSDK
         public event Action<PaymentData> OnPaymentCompleted;
         public event Action<AuthPopupData> OnAuthPopupCompleted;
         public event Action<UserData, SignatureData> OnPortalAuthCompleted;
-        public event Action<HAppsErrorData> OnError;
 
         public void OnMessage(string json)
         {
@@ -66,10 +65,6 @@ namespace HAppsSDK
 
                 case "auth_complete":
                     OnPortalAuthCompleted?.Invoke(msg.userData, msg.signatureData);
-                    break;
-
-                case "error":
-                    OnError?.Invoke(msg.error);
                     break;
 
                 default:

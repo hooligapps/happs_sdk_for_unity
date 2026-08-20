@@ -62,6 +62,26 @@ namespace HAppsSDK.Tests
 			Assert.Throws<ObjectDisposedException>(() => provider.Connect());
 		}
 
+		[Test]
+		public async Task PortalAuth_AlreadyVerified_CompletesWithoutNewBridgeResponse()
+		{
+			var provider = new HAppsWebProvider();
+			try
+			{
+				var connectTask = provider.Connect();
+				GetBridge(provider).OnMessage(
+					"{\"type\":\"connect\",\"initData\":{\"ready\":true},\"userData\":{\"userId\":\"user-1\",\"verified\":true}}");
+				await connectTask;
+
+				var result = await provider.OpenPortalAuthPopup();
+				Assert.That(result, Is.True);
+			}
+			finally
+			{
+				provider.Dispose();
+			}
+		}
+
 		private static HAppsJSBridge GetBridge(HAppsWebProvider provider)
 		{
 			var field = typeof(HAppsWebProvider).GetField("_bridge", BindingFlags.Instance | BindingFlags.NonPublic);

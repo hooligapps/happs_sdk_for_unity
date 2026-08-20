@@ -19,11 +19,21 @@ namespace HAppsSDK
 		private OidcDiscoveryDocument _discovery;
 		private string _pendingLoginState;
 		private MobileSession _currentSession;
+		private readonly SemaphoreSlim _sessionGate = new SemaphoreSlim(1, 1);
+		private readonly object _lifecycleSync = new object();
+		private readonly object _sessionTaskSync = new object();
+		private Task<MobileSession> _sessionRefreshTask;
+		private int _sessionRefreshVersion;
+		private TaskCompletionSource<MobileLoginResult> _activeLoginTcs;
+		private bool _loginInProgress;
+		private bool _disposed;
+		private int _stateVersion;
 
 		public MobileSession CurrentSession => _currentSession;
 
 		public void Configure(HAppsMobileAuthOptions options, IMobileTokenStore tokenStore = null)
 		{
+			ThrowIfDisposed();
 			_options = options ?? throw new ArgumentNullException(nameof(options));
 			_tokenStore = tokenStore ?? CreateDefaultTokenStore(_options.PlayerPrefsStorageKey);
 			HAppsLog.Log("Mobile configured");
@@ -41,109 +51,138 @@ namespace HAppsSDK
 		public Task<MobileSession> InitializeAsync()
 			=> InitSessionAsync();
 
-		public async Task<MobileSession> InitSessionAsync()
+		public Task<MobileSession> InitSessionAsync()
 		{
 			EnsureConfigured();
-			return await InitSessionInternalAsync(forceRefresh: true);
+			var stateVersion = CaptureStateVersion();
+			return RefreshSessionSingleFlightAsync(stateVersion);
 		}
 
-		public async Task<MobileSession> RefreshSessionAsync()
+		public Task<MobileSession> RefreshSessionAsync()
 		{
 			EnsureConfigured();
-			return await InitSessionInternalAsync(forceRefresh: true);
+			var stateVersion = CaptureStateVersion();
+			return RefreshSessionSingleFlightAsync(stateVersion);
 		}
 
 		public async Task<MobileLoginResult> LoginAsync()
 		{
 			EnsureConfigured();
 			EnsureOidcConfigured();
-			EnsureDeepLinkListener();
-
-			if (!string.IsNullOrWhiteSpace(_pendingLoginState))
-				throw new InvalidOperationException("Mobile login is already in progress.");
-
-			var deviceState = await EnsureDeviceRegisteredAsync();
-			await GetDiscoveryAsync();
-			var codeVerifier = CreateCodeVerifier();
-			var codeChallenge = CreateCodeChallenge(codeVerifier);
-			var startResponse = await StartOidcAsync(deviceState.DeviceId, codeChallenge);
-			var loginTcs = new TaskCompletionSource<MobileLoginResult>(TaskCreationOptions.RunContinuationsAsynchronously);
-			_pendingLoginState = startResponse.state;
-
-			void OnDeepLink(string url)
-			{
-				HandleLoginDeepLink(url, startResponse.state, codeVerifier, loginTcs);
-			}
-
-			_deepLinkListener.DeepLinkReceived += OnDeepLink;
-
-			using var timeoutCts = new CancellationTokenSource(_options.LoginTimeoutMs);
-			using var timeoutReg = timeoutCts.Token.Register(() =>
-			{
-				loginTcs.TrySetException(new TimeoutException("Mobile login timed out while waiting for the redirect callback."));
-			});
-
+			var stateVersion = BeginLogin();
+			Action<string> onDeepLink = null;
+			TaskCompletionSource<MobileLoginResult> loginTcs = null;
 			try
 			{
+				EnsureDeepLinkListener();
+				var deviceState = await RunSessionExclusiveAsync(
+					stateVersion,
+					() => EnsureDeviceRegisteredAsync(stateVersion));
+				await GetDiscoveryAsync(stateVersion);
+				ThrowIfStateInvalid(stateVersion);
+
+				var codeVerifier = CreateCodeVerifier();
+				var codeChallenge = CreateCodeChallenge(codeVerifier);
+				var startResponse = await RunSessionExclusiveAsync(
+					stateVersion,
+					() => StartOidcAsync(deviceState.DeviceId, codeChallenge, stateVersion));
+				ThrowIfStateInvalid(stateVersion);
+
+				loginTcs = new TaskCompletionSource<MobileLoginResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+				lock (_lifecycleSync)
+				{
+					ThrowIfStateInvalid(stateVersion);
+					_activeLoginTcs = loginTcs;
+					_pendingLoginState = startResponse.state;
+				}
+
+				onDeepLink = url => HandleLoginDeepLink(
+					url,
+					startResponse.state,
+					codeVerifier,
+					stateVersion,
+					loginTcs);
+				_deepLinkListener.DeepLinkReceived += onDeepLink;
+
+				using var timeoutCts = new CancellationTokenSource(_options.LoginTimeoutMs);
+				using var timeoutReg = timeoutCts.Token.Register(() =>
+				{
+					loginTcs.TrySetException(new TimeoutException("Mobile login timed out while waiting for the redirect callback."));
+				});
+
 				HAppsLog.Log("Opening mobile auth URL");
 				Application.OpenURL(startResponse.authorizationUrl);
 				var result = await loginTcs.Task;
+				ThrowIfStateInvalid(stateVersion);
 				HAppsLog.Log($"Mobile login completed: success={result.IsSuccess}");
 				return result;
 			}
 			finally
 			{
-				_pendingLoginState = null;
-				_deepLinkListener.DeepLinkReceived -= OnDeepLink;
+				if (_deepLinkListener != null && onDeepLink != null)
+					_deepLinkListener.DeepLinkReceived -= onDeepLink;
+
+				EndLogin(loginTcs);
 			}
 		}
 
 		public async Task LogoutAsync()
 		{
 			EnsureConfigured();
+			await _sessionGate.WaitAsync();
 
-			var tokenSet = await _tokenStore.LoadAsync();
-			if (tokenSet == null || string.IsNullOrWhiteSpace(tokenSet.DeviceId))
+			try
 			{
-				await ClearLocalStateAsync();
-				return;
-			}
-
-			if (string.IsNullOrWhiteSpace(tokenSet.IdToken) || string.IsNullOrWhiteSpace(_options.OidcLogoutUrl))
-			{
-				await ClearLocalStateAsync();
-				return;
-			}
-
-			await ExecuteRemoteLogoutAndClearLocalStateAsync(async () =>
-			{
-				var proof = CreateProofAsync(
-					"oidc-logout",
-					tokenSet,
-					HashHex(tokenSet.IdToken),
-					HashHex(_options.PostLogoutRedirectUri));
-
-				var request = new OidcLogoutRequest
+				var stateVersion = BeginStateReset("Mobile login was cancelled by logout.");
+				ThrowIfStateInvalid(stateVersion);
+				var tokenSet = await _tokenStore.LoadAsync();
+				if (tokenSet == null || string.IsNullOrWhiteSpace(tokenSet.DeviceId))
 				{
-					clientId = _options.ClientId,
-					deviceId = tokenSet.DeviceId,
-					idToken = tokenSet.IdToken,
-					postLogoutRedirectUri = _options.PostLogoutRedirectUri,
-					timestamp = proof.Timestamp,
-					nonce = proof.Nonce,
-					signature = proof.Signature
-				};
+					await ClearLocalStateAsync();
+					return;
+				}
 
-				var response = await SendJsonPostAsync<OidcLogoutRequest, OidcLogoutResponse>(
-					_options.OidcLogoutUrl,
-					request,
-					_options.HttpTimeoutSeconds);
-				if (response == null || string.IsNullOrWhiteSpace(response.logoutUrl))
-					throw new InvalidOperationException("OIDC logout response is invalid.");
+				if (string.IsNullOrWhiteSpace(tokenSet.IdToken) || string.IsNullOrWhiteSpace(_options.OidcLogoutUrl))
+				{
+					await ClearLocalStateAsync();
+					return;
+				}
 
-				HAppsLog.Log("Opening mobile logout URL");
-				Application.OpenURL(response.logoutUrl);
-			});
+				await ExecuteRemoteLogoutAndClearLocalStateAsync(async () =>
+				{
+					var proof = CreateProofAsync(
+						"oidc-logout",
+						tokenSet,
+						HashHex(tokenSet.IdToken),
+						HashHex(_options.PostLogoutRedirectUri));
+
+					var request = new OidcLogoutRequest
+					{
+						clientId = _options.ClientId,
+						deviceId = tokenSet.DeviceId,
+						idToken = tokenSet.IdToken,
+						postLogoutRedirectUri = _options.PostLogoutRedirectUri,
+						timestamp = proof.Timestamp,
+						nonce = proof.Nonce,
+						signature = proof.Signature
+					};
+
+					var response = await SendJsonPostAsync<OidcLogoutRequest, OidcLogoutResponse>(
+						_options.OidcLogoutUrl,
+						request,
+						_options.HttpTimeoutSeconds);
+					if (response == null || string.IsNullOrWhiteSpace(response.logoutUrl))
+						throw new InvalidOperationException("OIDC logout response is invalid.");
+
+					ThrowIfStateInvalid(stateVersion);
+					HAppsLog.Log("Opening mobile logout URL");
+					Application.OpenURL(response.logoutUrl);
+				});
+			}
+			finally
+			{
+				_sessionGate.Release();
+			}
 		}
 
 		private async Task ExecuteRemoteLogoutAndClearLocalStateAsync(Func<Task> remoteLogout)
@@ -174,34 +213,62 @@ namespace HAppsSDK
 			if (request == null)
 				throw new ArgumentNullException(nameof(request));
 
-			await EnsureActiveSessionAsync();
+			var stateVersion = CaptureStateVersion();
+			var accessToken = await RunSessionExclusiveAsync(
+				stateVersion,
+				async () => (await EnsureActiveSessionInternalAsync(stateVersion)).AccessToken);
 
 			try
 			{
-				return await CreatePaymentInternalAsync(request);
+				return await CreatePaymentInternalAsync(request, accessToken, stateVersion);
 			}
 			catch (MobileApiException ex) when (IsRecoverableSessionError(ex))
 			{
 				HAppsLog.Warn($"Create payment requires session recovery. statusCode={ex.StatusCode}");
-				await InitSessionInternalAsync(forceRefresh: true);
-				return await CreatePaymentInternalAsync(request);
+				accessToken = (await RefreshSessionSingleFlightAsync(stateVersion)).AccessToken;
+				return await CreatePaymentInternalAsync(request, accessToken, stateVersion);
 			}
 		}
 
 		public override void Dispose()
 		{
+			TaskCompletionSource<MobileLoginResult> loginTcs;
+			lock (_lifecycleSync)
+			{
+				if (_disposed)
+					return;
+
+				_disposed = true;
+				Interlocked.Increment(ref _stateVersion);
+				loginTcs = _activeLoginTcs;
+				_activeLoginTcs = null;
+				_pendingLoginState = null;
+			}
+
+			loginTcs?.TrySetException(new ObjectDisposedException(nameof(HAppsMobileProvider)));
+
 			if (_deepLinkListener != null)
 				_deepLinkListener.DeepLinkReceived -= HandleStrayDeepLink;
 
 			if (_deepLinkListener != null)
-				UnityEngine.Object.Destroy(_deepLinkListener.gameObject);
+			{
+				if (Application.isPlaying)
+					UnityEngine.Object.Destroy(_deepLinkListener.gameObject);
+				else
+					UnityEngine.Object.DestroyImmediate(_deepLinkListener.gameObject);
+			}
 
 			_deepLinkListener = null;
 			_discovery = null;
+			_currentSession = null;
+			_userData = null;
+			_loggedIn = false;
 		}
 
 		private void EnsureConfigured()
 		{
+			ThrowIfDisposed();
+
 			if (_options == null)
 				throw new InvalidOperationException("Call HApps.ConfigureMobile(...) before using HApps.Mobile.");
 
@@ -221,6 +288,128 @@ namespace HAppsSDK
 				throw new InvalidOperationException("Mobile login timeout must be greater than zero.");
 		}
 
+		private int CaptureStateVersion()
+		{
+			ThrowIfDisposed();
+			return Volatile.Read(ref _stateVersion);
+		}
+
+		private int BeginLogin()
+		{
+			lock (_lifecycleSync)
+			{
+				ThrowIfDisposed();
+				if (_loginInProgress)
+					throw new InvalidOperationException("Mobile login is already in progress.");
+
+				_loginInProgress = true;
+				return _stateVersion;
+			}
+		}
+
+		private void EndLogin(TaskCompletionSource<MobileLoginResult> loginTcs)
+		{
+			lock (_lifecycleSync)
+			{
+				if (ReferenceEquals(_activeLoginTcs, loginTcs))
+					_activeLoginTcs = null;
+
+				_pendingLoginState = null;
+				_loginInProgress = false;
+			}
+		}
+
+		private int BeginStateReset(string loginCancellationMessage)
+		{
+			TaskCompletionSource<MobileLoginResult> loginTcs;
+			int stateVersion;
+			lock (_lifecycleSync)
+			{
+				ThrowIfDisposed();
+				stateVersion = Interlocked.Increment(ref _stateVersion);
+				loginTcs = _activeLoginTcs;
+				_activeLoginTcs = null;
+				_pendingLoginState = null;
+			}
+
+			loginTcs?.TrySetException(new OperationCanceledException(loginCancellationMessage));
+			return stateVersion;
+		}
+
+		private void ThrowIfDisposed()
+		{
+			if (_disposed)
+				throw new ObjectDisposedException(nameof(HAppsMobileProvider));
+		}
+
+		private void ThrowIfStateInvalid(int stateVersion)
+		{
+			ThrowIfDisposed();
+			if (stateVersion != Volatile.Read(ref _stateVersion))
+				throw new OperationCanceledException("Mobile state changed while the operation was running.");
+		}
+
+		private async Task<T> RunSessionExclusiveAsync<T>(int stateVersion, Func<Task<T>> action)
+		{
+			await _sessionGate.WaitAsync();
+			try
+			{
+				ThrowIfStateInvalid(stateVersion);
+				var result = await action();
+				ThrowIfStateInvalid(stateVersion);
+				return result;
+			}
+			finally
+			{
+				_sessionGate.Release();
+			}
+		}
+
+		private Task<MobileSession> RefreshSessionSingleFlightAsync(int stateVersion)
+		{
+			lock (_sessionTaskSync)
+			{
+				if (_sessionRefreshTask != null && _sessionRefreshVersion == stateVersion)
+					return _sessionRefreshTask;
+
+				_sessionRefreshVersion = stateVersion;
+				var refreshTask = RunSessionExclusiveAsync(
+					stateVersion,
+					() => InitSessionInternalAsync(forceRefresh: true, stateVersion));
+				_sessionRefreshTask = refreshTask;
+				ObserveSessionRefreshCompletion(refreshTask);
+				return refreshTask;
+			}
+		}
+
+		private void ObserveSessionRefreshCompletion(Task<MobileSession> task)
+		{
+			task.ContinueWith(completed =>
+			{
+				_ = completed.Exception;
+				lock (_sessionTaskSync)
+				{
+					if (ReferenceEquals(_sessionRefreshTask, task))
+						_sessionRefreshTask = null;
+				}
+			}, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+		}
+
+		private async Task RunSessionExclusiveAsync(int stateVersion, Func<Task> action)
+		{
+			await _sessionGate.WaitAsync();
+			try
+			{
+				ThrowIfStateInvalid(stateVersion);
+				await action();
+				ThrowIfStateInvalid(stateVersion);
+			}
+			finally
+			{
+				_sessionGate.Release();
+			}
+		}
+
 		private void EnsureOidcConfigured()
 		{
 			if (string.IsNullOrWhiteSpace(_options.Authority))
@@ -235,22 +424,24 @@ namespace HAppsSDK
 				throw new InvalidOperationException("Mobile PostLogoutRedirectUri is not configured.");
 		}
 
-		private async Task EnsureActiveSessionAsync()
+		private async Task<MobileSession> EnsureActiveSessionInternalAsync(int stateVersion)
 		{
+			ThrowIfStateInvalid(stateVersion);
 			if (_currentSession != null && !IsExpired(_currentSession.AccessTokenExpiresAtUtc) && !string.IsNullOrWhiteSpace(_currentSession.AccessToken))
-				return;
+				return _currentSession;
 
 			var tokenSet = await _tokenStore.LoadAsync();
+			ThrowIfStateInvalid(stateVersion);
 			if (tokenSet != null && !IsExpired(tokenSet.AccessTokenExpiresAtUtc) && !string.IsNullOrWhiteSpace(tokenSet.AccessToken))
-			{
-				ApplyCachedSession(tokenSet);
-				return;
-			}
+				return ApplyCachedSession(tokenSet);
 
-			await InitSessionInternalAsync(forceRefresh: true);
+			return await InitSessionInternalAsync(forceRefresh: true, stateVersion);
 		}
 
-		private async Task<MobileCreatePaymentResult> CreatePaymentInternalAsync(MobileCreatePaymentRequest request)
+		private async Task<MobileCreatePaymentResult> CreatePaymentInternalAsync(
+			MobileCreatePaymentRequest request,
+			string accessToken,
+			int stateVersion)
 		{
 			if (string.IsNullOrWhiteSpace(_options.CreatePaymentUrl))
 				throw new InvalidOperationException("Portal create payment endpoint is not configured.");
@@ -268,9 +459,10 @@ namespace HAppsSDK
 			HAppsLog.Log("Creating mobile payment");
 			var responseText = await SendAuthorizedJsonPostAsync(
 				_options.CreatePaymentUrl,
-				_currentSession.AccessToken,
+				accessToken,
 				json,
 				_options.HttpTimeoutSeconds);
+			ThrowIfStateInvalid(stateVersion);
 			var response = JsonUtility.FromJson<CreatePaymentResponse>(responseText);
 			if (response == null || string.IsNullOrWhiteSpace(response.orderId) || string.IsNullOrWhiteSpace(response.paymentUrl))
 				throw new InvalidOperationException("Create payment response is invalid.");
@@ -302,11 +494,13 @@ namespace HAppsSDK
 
 		private void EnsureDeepLinkListener()
 		{
+			ThrowIfDisposed();
 			if (_deepLinkListener != null)
 				return;
 
 			var go = new GameObject("HAppsMobileDeepLinkListener");
-			UnityEngine.Object.DontDestroyOnLoad(go);
+			if (Application.isPlaying)
+				UnityEngine.Object.DontDestroyOnLoad(go);
 			_deepLinkListener = go.AddComponent<HAppsMobileDeepLinkListener>();
 			_deepLinkListener.DeepLinkReceived += HandleStrayDeepLink;
 			HAppsLog.Log("Mobile deep link listener created");
@@ -314,14 +508,18 @@ namespace HAppsSDK
 
 		private void HandleStrayDeepLink(string url)
 		{
+			if (_disposed)
+				return;
+
 			if (string.IsNullOrEmpty(_pendingLoginState))
 				return;
 
 			HAppsLog.Log("Pending mobile auth state is active; deep link received");
 		}
 
-		private async Task<OidcDiscoveryDocument> GetDiscoveryAsync()
+		private async Task<OidcDiscoveryDocument> GetDiscoveryAsync(int stateVersion)
 		{
+			ThrowIfStateInvalid(stateVersion);
 			if (_discovery != null)
 				return _discovery;
 
@@ -329,17 +527,20 @@ namespace HAppsSDK
 			var url = $"{authority}/.well-known/openid-configuration";
 			HAppsLog.Log("Loading OIDC discovery");
 			var json = await SendGetAsync(url, _options.HttpTimeoutSeconds);
-			_discovery = JsonUtility.FromJson<OidcDiscoveryDocument>(json);
+			ThrowIfStateInvalid(stateVersion);
+			var discovery = JsonUtility.FromJson<OidcDiscoveryDocument>(json);
 
-			if (_discovery == null || string.IsNullOrEmpty(_discovery.authorization_endpoint) || string.IsNullOrEmpty(_discovery.token_endpoint))
+			if (discovery == null || string.IsNullOrEmpty(discovery.authorization_endpoint) || string.IsNullOrEmpty(discovery.token_endpoint))
 				throw new InvalidOperationException("OIDC discovery document is invalid.");
 
-			return _discovery;
+			_discovery = discovery;
+			return discovery;
 		}
 
-		private async Task<MobileSession> InitSessionInternalAsync(bool forceRefresh)
+		private async Task<MobileSession> InitSessionInternalAsync(bool forceRefresh, int stateVersion)
 		{
-			var tokenSet = await EnsureDeviceRegisteredAsync();
+			ThrowIfStateInvalid(stateVersion);
+			var tokenSet = await EnsureDeviceRegisteredAsync(stateVersion);
 
 			if (!forceRefresh && !IsExpired(tokenSet.AccessTokenExpiresAtUtc) && !string.IsNullOrWhiteSpace(tokenSet.AccessToken))
 				return ApplyCachedSession(tokenSet);
@@ -359,15 +560,18 @@ namespace HAppsSDK
 				_options.InitSessionUrl,
 				payload,
 				_options.HttpTimeoutSeconds);
+			ThrowIfStateInvalid(stateVersion);
 			if (response == null || string.IsNullOrWhiteSpace(response.accessToken) || string.IsNullOrWhiteSpace(response.publicId))
 				throw new InvalidOperationException("Portal initSession response is invalid.");
 
-			return await ApplySessionResponseAsync(tokenSet, response);
+			return await ApplySessionResponseAsync(tokenSet, response, stateVersion);
 		}
 
-		private async Task<MobileTokenSet> EnsureDeviceRegisteredAsync()
+		private async Task<MobileTokenSet> EnsureDeviceRegisteredAsync(int stateVersion)
 		{
+			ThrowIfStateInvalid(stateVersion);
 			var tokenSet = await _tokenStore.LoadAsync() ?? new MobileTokenSet();
+			ThrowIfStateInvalid(stateVersion);
 			EnsureDeviceKeyMaterial(tokenSet);
 
 			if (!string.IsNullOrWhiteSpace(tokenSet.DeviceId))
@@ -394,18 +598,22 @@ namespace HAppsSDK
 				_options.DeviceRegisterUrl,
 				request,
 				_options.HttpTimeoutSeconds);
+			ThrowIfStateInvalid(stateVersion);
 			if (response == null || string.IsNullOrWhiteSpace(response.deviceId))
 				throw new InvalidOperationException("Device register response is invalid.");
 
 			tokenSet.DeviceId = response.deviceId;
 			await _tokenStore.SaveAsync(tokenSet);
+			ThrowIfStateInvalid(stateVersion);
 			HAppsLog.Log("Mobile device registered");
 			return tokenSet;
 		}
 
-		private async Task<OidcStartResponse> StartOidcAsync(string deviceId, string codeChallenge)
+		private async Task<OidcStartResponse> StartOidcAsync(string deviceId, string codeChallenge, int stateVersion)
 		{
+			ThrowIfStateInvalid(stateVersion);
 			var tokenSet = await _tokenStore.LoadAsync();
+			ThrowIfStateInvalid(stateVersion);
 			var proof = CreateProofAsync(
 				"oidc-start",
 				tokenSet,
@@ -428,6 +636,7 @@ namespace HAppsSDK
 				_options.OidcStartUrl,
 				request,
 				_options.HttpTimeoutSeconds);
+			ThrowIfStateInvalid(stateVersion);
 			if (response == null || string.IsNullOrWhiteSpace(response.authorizationUrl) || string.IsNullOrWhiteSpace(response.state))
 				throw new InvalidOperationException("OIDC start response is invalid.");
 
@@ -438,6 +647,7 @@ namespace HAppsSDK
 			string url,
 			string expectedState,
 			string codeVerifier,
+			int stateVersion,
 			TaskCompletionSource<MobileLoginResult> loginTcs)
 		{
 			if (loginTcs.Task.IsCompleted)
@@ -445,6 +655,7 @@ namespace HAppsSDK
 
 			try
 			{
+				ThrowIfStateInvalid(stateVersion);
 				HAppsLog.Log("Handling mobile deep link");
 
 				if (!MatchesRedirectUri(url, _options.RedirectUri))
@@ -475,7 +686,7 @@ namespace HAppsSDK
 					return;
 				}
 
-				var discovery = await GetDiscoveryAsync();
+				var discovery = await GetDiscoveryAsync(stateVersion);
 				var oidcTokens = await ExchangeCodeAsync(
 					discovery.token_endpoint,
 					_options.ClientId,
@@ -483,44 +694,53 @@ namespace HAppsSDK
 					_options.RedirectUri,
 					codeVerifier,
 					_options.HttpTimeoutSeconds);
+				ThrowIfStateInvalid(stateVersion);
 
 				if (string.IsNullOrWhiteSpace(oidcTokens.id_token))
 					throw new InvalidOperationException("Token exchange response does not contain id_token.");
 
-				await ExchangeOidcAsync(expectedState, oidcTokens.id_token);
-				var session = await InitSessionInternalAsync(forceRefresh: true);
 				var socialId = ExtractSubjectFromJwt(oidcTokens.id_token);
-
-				var tokenSet = await _tokenStore.LoadAsync() ?? new MobileTokenSet();
-				tokenSet.IdToken = oidcTokens.id_token;
-				tokenSet.OidcAccessToken = oidcTokens.access_token;
-				tokenSet.SocialId = socialId;
-				await _tokenStore.SaveAsync(tokenSet);
-				_currentSession.IsAuthorized = true;
-				_loggedIn = true;
-				_userData = new UserData
+				var result = await RunSessionExclusiveAsync(stateVersion, async () =>
 				{
-					userId = session.PublicId,
-					userName = socialId,
-					verified = session.Verified
-				};
+					await ExchangeOidcAsync(expectedState, oidcTokens.id_token, stateVersion);
+					var session = await InitSessionInternalAsync(forceRefresh: true, stateVersion);
+					var tokenSet = await _tokenStore.LoadAsync() ?? new MobileTokenSet();
+					ThrowIfStateInvalid(stateVersion);
+					tokenSet.IdToken = oidcTokens.id_token;
+					tokenSet.OidcAccessToken = oidcTokens.access_token;
+					tokenSet.SocialId = socialId;
+					await _tokenStore.SaveAsync(tokenSet);
+					ThrowIfStateInvalid(stateVersion);
+					_currentSession.IsAuthorized = true;
+					_loggedIn = true;
+					_userData = new UserData
+					{
+						userId = session.PublicId,
+						userName = socialId,
+						verified = session.Verified
+					};
 
-				loginTcs.TrySetResult(new MobileLoginResult
-				{
-					AccessToken = session.AccessToken,
-					IdToken = oidcTokens.id_token,
-					OidcAccessToken = oidcTokens.access_token,
-					TokenType = oidcTokens.token_type,
-					ExpiresIn = session.AccessTokenExpiresAtUtc > 0
-						? (int)Math.Max(0, session.AccessTokenExpiresAtUtc - GetUnixTimeSeconds())
-						: oidcTokens.expires_in,
-					Scope = oidcTokens.scope,
-					RedirectUri = _options.RedirectUri,
-					PublicId = session.PublicId,
-					SocialId = socialId,
-					Verified = session.Verified,
-					DeviceId = session.DeviceId
+					return new MobileLoginResult
+					{
+						AccessToken = session.AccessToken,
+						IdToken = oidcTokens.id_token,
+						OidcAccessToken = oidcTokens.access_token,
+						TokenType = oidcTokens.token_type,
+						ExpiresIn = session.AccessTokenExpiresAtUtc > 0
+							? (int)Math.Max(0, session.AccessTokenExpiresAtUtc - GetUnixTimeSeconds())
+							: oidcTokens.expires_in,
+						Scope = oidcTokens.scope,
+						Code = code,
+						CodeVerifier = codeVerifier,
+						RedirectUri = _options.RedirectUri,
+						PublicId = session.PublicId,
+						SocialId = socialId,
+						Verified = session.Verified,
+						DeviceId = session.DeviceId
+					};
 				});
+
+				loginTcs.TrySetResult(result);
 			}
 			catch (Exception ex)
 			{
@@ -528,9 +748,11 @@ namespace HAppsSDK
 			}
 		}
 
-		private async Task ExchangeOidcAsync(string state, string idToken)
+		private async Task ExchangeOidcAsync(string state, string idToken, int stateVersion)
 		{
+			ThrowIfStateInvalid(stateVersion);
 			var tokenSet = await _tokenStore.LoadAsync();
+			ThrowIfStateInvalid(stateVersion);
 			var proof = CreateProofAsync(
 				"oidc-exchange",
 				tokenSet,
@@ -553,17 +775,23 @@ namespace HAppsSDK
 				_options.OidcExchangeUrl,
 				request,
 				_options.HttpTimeoutSeconds);
+			ThrowIfStateInvalid(stateVersion);
 			if (response == null || !response.ok)
 				throw new InvalidOperationException("OIDC exchange response is invalid.");
 		}
 
-		private async Task<MobileSession> ApplySessionResponseAsync(MobileTokenSet tokenSet, InitSessionResponse response)
+		private async Task<MobileSession> ApplySessionResponseAsync(
+			MobileTokenSet tokenSet,
+			InitSessionResponse response,
+			int stateVersion)
 		{
+			ThrowIfStateInvalid(stateVersion);
 			tokenSet.AccessToken = response.accessToken;
 			tokenSet.AccessTokenExpiresAtUtc = GetUnixTimeSeconds() + Math.Max(0, response.expiresIn - SessionExpirySkewSeconds);
 			tokenSet.PublicId = response.publicId;
 			tokenSet.Verified = response.verified;
 			await _tokenStore.SaveAsync(tokenSet);
+			ThrowIfStateInvalid(stateVersion);
 			return ApplyCachedSession(tokenSet);
 		}
 

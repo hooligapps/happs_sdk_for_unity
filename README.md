@@ -122,7 +122,7 @@ switch (authPopupData.Flow)
 ### Standalone WebGL Template Example
 
 ```html
-<script src="https://hooli.games/public/js/sdk/1.0.4/hooligapps.debug.js"></script>
+<script src="https://hooli.games/public/js/sdk/1.0.3/hooligapps.debug.js"></script>
 ```
 
 ```javascript
@@ -189,10 +189,10 @@ Choose one script variant:
 
 ```html
 <!-- Development -->
-<script src="https://hooli.games/public/js/sdk/1.0.4/hooligapps.debug.js"></script>
+<script src="https://hooli.games/public/js/sdk/1.0.3/hooligapps.debug.js"></script>
 
 <!-- Production -->
-<!-- <script src="https://hooli.games/public/js/sdk/1.0.4/hooligapps.js"></script> -->
+<!-- <script src="https://hooli.games/public/js/sdk/1.0.3/hooligapps.js"></script> -->
 ```
 
 ### Portal WebGL Template Example
@@ -200,7 +200,7 @@ Choose one script variant:
 Example portal page setup:
 
 ```html
-<script src="https://hooli.games/public/js/sdk/1.0.4/hooligapps.debug.js"></script>
+<script src="https://hooli.games/public/js/sdk/1.0.3/hooligapps.debug.js"></script>
 ```
 
 ```javascript

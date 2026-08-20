@@ -46,7 +46,6 @@ namespace HAppsSDK
             _bridge.OnPaymentCompleted += HandlePaymentCompleted;
             _bridge.OnAuthPopupCompleted += HandleAuthPopupCompleted;
             _bridge.OnPortalAuthCompleted += HandlePortalAuthCompleted;
-            _bridge.OnError += HandleError;
 
             HAppsLog.Log("Provider created");
         }
@@ -93,6 +92,12 @@ namespace HAppsSDK
 
         public override Task<bool> OpenPortalAuthPopup()
         {
+            if (_disposed)
+                throw new ObjectDisposedException(nameof(HAppsWebProvider));
+
+            if (_userData?.verified == true)
+                return Task.FromResult(true);
+
             return StartOperation<bool>(
                 OperationType.OpenPortalAuth,
                 () => _bridge.SendMessage("portal_auth", "{}"),
@@ -136,7 +141,6 @@ namespace HAppsSDK
                 _bridge.OnPaymentCompleted -= HandlePaymentCompleted;
                 _bridge.OnAuthPopupCompleted -= HandleAuthPopupCompleted;
                 _bridge.OnPortalAuthCompleted -= HandlePortalAuthCompleted;
-                _bridge.OnError -= HandleError;
             }
 
             var ex = new ObjectDisposedException("HAppsSDK");
@@ -300,16 +304,6 @@ namespace HAppsSDK
 
             RaiseAuthCompleted(user, signature);
             Complete(OperationType.OpenPortalAuth, !string.IsNullOrEmpty(sig));
-        }
-
-        private void HandleError(HAppsErrorData error)
-        {
-            var exception = new HAppsException(error);
-            var pending = new List<OperationBase>(_operations.Values);
-            _operations.Clear();
-
-            foreach (var operation in pending)
-                operation.Fail(exception);
         }
 
         [Serializable]

@@ -2,7 +2,8 @@
 
 ## 3.0.1
 
-- Require HApps JS SDK 1.0.4
+- Keep compatibility with the existing HApps JS SDK 1.0.3 contract
+- Complete portal authentication immediately when the connected profile is already verified
 - Complete WebGL payment failures without waiting indefinitely
 - Add typed profile and bridge errors
 - Add timeouts to interactive WebGL operations
@@ -13,6 +14,8 @@
 - Add a configurable timeout to every mobile HTTP request
 - Always clear local credentials during logout, including remote logout failures
 - Require an exact mobile redirect endpoint match before accepting an OIDC callback
+- Serialize mobile session mutations and share concurrent refresh operations
+- Cancel login and reject stale state updates after logout or provider disposal
 
 ## 3.0.0
 
