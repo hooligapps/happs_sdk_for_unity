@@ -1,6 +1,6 @@
 # HApps Unity SDK
 
-Unity package for HApps WebGL and mobile integrations.
+Unity SDK 3.0.1 for HApps WebGL integrations through JS SDK 1.0.3 and native Android integrations.
 
 ## Installation
 
@@ -15,6 +15,8 @@ Add the package to your Unity project through `Packages/manifest.json`:
 ```
 
 Use a release tag such as `v3.0.1`. During development you can temporarily point to a commit hash instead of a tag.
+
+For an existing WebGL project, follow [WebGL Migration: SDK 2.0.6 to 3.0.1](MIGRATION_WEB_2.0.6_TO_3.0.1.md).
 
 ## Runtime API
 
@@ -50,6 +52,12 @@ Your WebGL page must:
 - initialize the browser bridge with `HApps.init(...)`
 - use `unityObjectName: "HAppsJSBridge"`
 - use `unityMethodName: "OnMessage"`
+- set `isPortal: false` for standalone pages
+- set `isPortal: true` and provide `ssoLoginUrl` for embedded portal pages
+
+`debug` is not an `HApps.init(...)` option in JS SDK 1.0.3. Load `hooligapps.debug.js` instead of `hooligapps.js` when browser-side debug output is needed. In standalone mode, the bridge `ready` promise resolves immediately with `user: null`; authentication is performed through `OpenIdpAuthPopup(url)`.
+
+Do not use the embedded `HApps.init(...).ready` promise as the Unity readiness gate with deployed JS SDK 1.0.3: its initial successful portal login does not resolve that promise. Use `await HApps.Web.Connect()` in Unity instead.
 
 ## Web Integration Modes
 
@@ -58,9 +66,9 @@ Standalone IDP popup flow:
 - use `HApps.Web.OpenIdpAuthPopup(url)`
 - inspect returned `AuthPopupData`
 - supported results:
-- `ticket`: exchange `ticket` on your backend
-- `cookie`: auth already completed through cookie session
-- `cancelled`: popup flow did not complete
+  - `ticket`: exchange `ticket` on your backend
+  - `cookie`: auth already completed through cookie session
+  - `cancelled`: popup flow did not complete
 
 Embedded portal flow:
 
@@ -68,8 +76,11 @@ Embedded portal flow:
 - send `HApps.Web.Signature` to your backend if you need server-side user resolution
 - call `HApps.Web.OpenPortalAuthPopup()` when the game must show portal login UI
 - call `HApps.Web.OpenAgeVerification()` when the game must show portal age verification UI
-- call `HApps.Web.SetTheaterMode(true/false)` when the game must toggle portal theater mode
 - subscribe to `HApps.Web.AuthCompleted` if auth can complete outside the awaited popup flow
+
+If the connected profile is already verified, `OpenPortalAuthPopup()` returns `true` locally without opening a popup or emitting a new `AuthCompleted` event.
+
+`SetTheaterMode(bool)` remains in the Unity API, but JS SDK 1.0.3 does not dispatch the `set_theater_mode` event. Do not depend on it with the supported browser contract.
 
 Example subscription:
 
@@ -108,18 +119,18 @@ HApps.ConfigureMobile(new HAppsMobileAuthOptions
     ClientId = "your-mobile-client-id",
     RedirectUri = "com.example.game://auth/callback",
     PostLogoutRedirectUri = "com.example.game://logout",
-    Scope = "openid email offline_access",
     DeviceRegisterUrl = "https://portal.igra.rocks/api/v1/mobile/device/register",
     InitSessionUrl = "https://portal.igra.rocks/api/v1/mobile/session/init",
     OidcStartUrl = "https://portal.igra.rocks/api/v1/mobile/oidc/start",
     OidcExchangeUrl = "https://portal.igra.rocks/api/v1/mobile/oidc/exchange",
     OidcLogoutUrl = "https://portal.igra.rocks/api/v1/mobile/oidc/logout",
     CreatePaymentUrl = "https://portal.igra.rocks/api/v1/mobile/payments",
-    HttpTimeoutSeconds = 30
+    HttpTimeoutSeconds = 30,
+    LoginTimeoutMs = 180000
 });
 ```
 
-`HttpTimeoutSeconds` applies to every mobile API request. Logout always removes local credentials, even if the remote logout endpoint is unavailable.
+`HttpTimeoutSeconds` applies separately to every mobile API request. `LoginTimeoutMs` limits the wait for the app deep-link callback after opening the system browser. Logout always removes local credentials, even if the remote logout endpoint is unavailable.
 
 Typical flow:
 
@@ -149,15 +160,20 @@ var payment = await HApps.Mobile.CreatePaymentAsync(new MobileCreatePaymentReque
 Notes:
 
 - Android is the only supported native mobile runtime in this release
+- Android API 23 or newer is required by the default AES-GCM Android Keystore token store
 - `InitSessionAsync()` ensures a device keypair exists, registers the device if needed, then calls signed `session/init`
+- concurrent `InitSessionAsync()` and `RefreshSessionAsync()` calls share one session operation
 - `LoginAsync()` starts OIDC login through `oidc/start`, exchanges the authorization `code`, then calls `oidc/exchange` and a fresh `session/init`
+- only one `LoginAsync()` operation can be active; another login attempt fails instead of replacing its callback state
 - after `oidc/exchange`, the SDK switches the device to the new account-linked mobile session
 - `CreatePaymentAsync()` sends the current portal access token in `Authorization: Bearer ...`
 - on `401 invalid_mobile_session` or `401 mobile_session_expired` the SDK retries through `InitSessionAsync()`
 - `LogoutAsync()` calls `oidc/logout`, opens the returned logout URL, and clears local mobile device state
+- logout invalidates queued session work and cancels an active login; `HApps.Shutdown()` rejects late state updates, although an already started HTTP request may still finish internally
 - `CreatePaymentAsync()` opens the returned `paymentUrl`, but does not verify final payment status
 - when no custom `IMobileTokenStore` is supplied, Android tokens are encrypted with AES-GCM using a non-exportable Android Keystore key
 - `PlayerPrefsMobileTokenStore` is an insecure legacy/dev option because it stores tokens as plaintext
+- `HAppsMobileAuthOptions.Scope` remains for source compatibility but is not sent by this SDK version; the server controls requested OIDC scopes
 
 ## Notes
 
@@ -166,9 +182,11 @@ Notes:
 - `OpenIdpAuthPopup(url)` returns `AuthPopupData`, not plain `string`
 - `AuthPopupData` supports both ticket-based and cookie-based session auth
 - `Connect()` and `OpenPortalAuthPopup()` are separate steps
-- `OpenAgeVerification()` and `SetTheaterMode()` are fire-and-forget bridge calls with no completion callback
+- `OpenAgeVerification()` is a fire-and-forget bridge call with no completion callback
+- `SetTheaterMode()` has no effect with JS SDK 1.0.3 because that browser version does not dispatch its event
 - debug logging is disabled by default; `SetDebugLogging(true)` enables sanitized debug/warn logs, while errors always log
 - SDK logs never include tokens, authorization codes, signatures, deep-link query strings, or auth request/response bodies
 - `MakePayment()` accepts a backend-created `orderId`
+- a second `MakePayment()` call throws `InvalidOperationException` while the first payment is still active; it does not replace the first operation
 - mobile `GetProfile()` and mobile `MakePayment(orderId)` are not part of the current native flow
 - sample scene/scripts remain in the host project, not in the package

@@ -3,9 +3,11 @@
 ## 3.0.1
 
 - Keep compatibility with the existing HApps JS SDK 1.0.3 contract
+- Add a WebGL migration guide from Unity SDK 2.0.6
+- Document the JS 1.0.3 embedded `ready` and theater-mode limitations
 - Complete portal authentication immediately when the connected profile is already verified
 - Complete WebGL payment failures without waiting indefinitely
-- Add typed profile and bridge errors
+- Add typed profile errors
 - Add timeouts to interactive WebGL operations
 - Dispose the WebGL bridge object and reject operations after shutdown
 - Disable debug logging by default and redact authentication secrets from logs
@@ -23,7 +25,7 @@
 - Replace `HApps.Provider.Signature` with `HApps.Web.Signature`
 - Document the current mobile session, login, logout, and payment flows
 - Add `HApps.Web.OpenAgeVerification(bool adultMode = true)` for portal age verification UI
-- Add `HApps.Web.SetTheaterMode(bool enabled)` for portal theater mode toggle
+- Add the `HApps.Web.SetTheaterMode(bool enabled)` API surface for portal theater mode
 - Add `HApps.SetDebugLogging(bool enabled)` for toggling SDK debug and warning logs
 
 ## 2.0.5

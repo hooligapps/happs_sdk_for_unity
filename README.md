@@ -1,6 +1,6 @@
-# HApps Web SDK
+# HApps Unity SDK
 
-Unity SDK for HApps WebGL integrations.
+Unity SDK 3.0.1 for HApps WebGL integrations through JS SDK 1.0.3 and native Android integrations.
 
 ## Installation
 
@@ -18,10 +18,13 @@ The SDK is distributed as a Unity package from:
 
 - `UnitySDK/Packages/com.happs.sdk`
 
-This SDK supports two distinct integration modes:
+Upgrading an existing WebGL integration from SDK 2.0.6: see [WebGL Migration: 2.0.6 to 3.0.1](UnitySDK/Packages/com.happs.sdk/MIGRATION_WEB_2.0.6_TO_3.0.1.md).
+
+This SDK supports three distinct integration modes:
 
 1. Standalone WebGL auth via backend IDP popup
 2. Embedded portal integration via JS bridge
+3. Native Android session, OIDC login, and payment creation
 
 ## Supported Public API
 
@@ -55,9 +58,9 @@ Method semantics:
 - `HApps.Web.GetProfile()` requests the current user profile from the platform.
 - `HApps.Web.MakePayment(orderId)` starts a payment flow for an already created backend order.
 - `HApps.Web.OpenIdpAuthPopup(url)` opens standalone backend auth popup and returns `AuthPopupData` for either ticket-based or cookie-based session auth.
-- `HApps.Web.OpenPortalAuthPopup()` opens portal-managed auth UI and returns `true` when portal auth completes successfully.
+- `HApps.Web.OpenPortalAuthPopup()` opens portal-managed auth UI and returns `true` when portal auth completes successfully. If the connected profile is already verified, it returns `true` locally without opening a popup or emitting a new `AuthCompleted` event.
 - `HApps.Web.OpenAgeVerification(adultMode)` opens portal-managed age verification UI from the game.
-- `HApps.Web.SetTheaterMode(enabled)` toggles portal theater mode from the game.
+- `HApps.Web.SetTheaterMode(enabled)` is retained in the public API, but deployed JS SDK 1.0.3 does not dispatch its `set_theater_mode` event. Do not depend on this call until the browser contract is updated.
 - `HApps.Web.AuthCompleted` fires when the external page script sends `auth_complete`, even if you are not awaiting `OpenPortalAuthPopup()`.
 - `HApps.Web.IsPortalSite()` reflects `window.HApps.isPortal()` from the JS environment.
 - `HApps.Web.IsReady()` reflects `window.HApps.isReady()` from the JS environment.
@@ -65,7 +68,7 @@ Method semantics:
 - Native mobile auth currently supports Android only. Its default token store encrypts data with an Android Keystore-backed AES-GCM key.
 - `PlayerPrefsMobileTokenStore` is retained only as an explicitly insecure legacy/dev option.
 - `HApps.Mobile` is the native/mobile branch for portal session bootstrap, OIDC login, and mobile payment creation.
-- `Shutdown()` disposes the current provider instance.
+- `Shutdown()` disposes both WebGL and mobile provider instances. Late mobile results can no longer update SDK state after shutdown.
 
 ## Choose Your Flow
 
@@ -116,8 +119,8 @@ switch (authPopupData.Flow)
 - the popup authenticates the user via your backend
 - Unity receives `AuthPopupData`
 - popup auth supports two success modes:
-- `ticket`: your backend exchanges `ticket` for the real auth/session token
-- `cookie`: auth is already completed through cookie session without a ticket roundtrip
+  - `ticket`: your backend exchanges `ticket` for the real auth/session token
+  - `cookie`: auth is already completed through cookie session without a ticket roundtrip
 
 ### Standalone WebGL Template Example
 
@@ -127,7 +130,6 @@ switch (authPopupData.Flow)
 
 ```javascript
 function initHApps(unityInstance) {
-    const BACKEND_HOST = "https://your-backend.example/api";
     const PLATFORM_ORIGIN = "https://portal.example.com";
 
     if (typeof HApps === "undefined") {
@@ -137,11 +139,10 @@ function initHApps(unityInstance) {
 
     const result = HApps.init({
         platformOrigin: PLATFORM_ORIGIN,
-        ssoLoginUrl: BACKEND_HOST + "/sign",
+        isPortal: false,
         unityObjectName: "HAppsJSBridge",
         unityMethodName: "OnMessage",
-        gameInstance: unityInstance,
-        debug: true
+        gameInstance: unityInstance
     });
 
     result.ready.then(function(data) {
@@ -158,8 +159,11 @@ createUnityInstance(canvas, config, onProgress).then((unityInstance) => {
 
 Required bridge config for Unity:
 
+- `isPortal: false`
 - `unityObjectName: "HAppsJSBridge"`
 - `unityMethodName: "OnMessage"`
+
+In standalone mode, `result.ready` resolves immediately with `user: null`. User authentication is performed later through `HApps.Web.OpenIdpAuthPopup(url)`.
 
 ### Backend Requirements
 
@@ -213,19 +217,13 @@ function initHApps(unityInstance) {
         return;
     }
 
-    const result = HApps.init({
+    HApps.init({
         platformOrigin: PLATFORM_ORIGIN,
         ssoLoginUrl: BACKEND_HOST + "/sign",
+        isPortal: true,
         unityObjectName: "HAppsJSBridge",
         unityMethodName: "OnMessage",
-        gameInstance: unityInstance,
-        debug: true
-    });
-
-    result.ready.then(function(data) {
-        console.log("HApps ready, user:", data.user);
-    }).catch(function(err) {
-        console.error("HApps login failed:", err);
+        gameInstance: unityInstance
     });
 }
 
@@ -236,19 +234,30 @@ createUnityInstance(canvas, config, onProgress).then((unityInstance) => {
 
 Required bridge config for Unity:
 
+- `isPortal: true`
 - `unityObjectName: "HAppsJSBridge"`
 - `unityMethodName: "OnMessage"`
 
-Minimal `HApps.init(...)` config:
+Common `HApps.init(...)` config:
 
 - `platformOrigin`
-- `ssoLoginUrl`
 - `gameInstance`
+- `unityObjectName: "HAppsJSBridge"`
+- `unityMethodName: "OnMessage"`
+
+Mode-specific config:
+
+- standalone: `isPortal: false`
+- embedded portal: `isPortal: true` and `ssoLoginUrl`
 
 Optional config:
 
 - `maxRetries`
 - `retryDelayMs`
+
+`debug` is not an `HApps.init(...)` option in JS SDK 1.0.3. Select `hooligapps.debug.js` when browser-side debug output is needed.
+
+Do not use the embedded `result.ready` promise as the Unity readiness gate with deployed JS SDK 1.0.3: its initial successful portal login does not resolve that promise. Use `await HApps.Web.Connect()` in Unity. This limitation does not apply to standalone mode, where `ready` resolves immediately.
 
 ### Recommended Unity Flow
 
@@ -322,6 +331,7 @@ private void HandleAuthCompleted(UserData user, SignatureData signature)
 - `Connect()` gives Unity access to platform-side context and stores portal signature in `HApps.Web.Signature`.
 - your game backend should use that signature to resolve the authenticated user/session on the server side
 - `OpenPortalAuthPopup()` is the public auth entrypoint for showing portal login UI from the game
+- if the connected profile is already verified, `OpenPortalAuthPopup()` returns `true` locally and does not emit a new `AuthCompleted` event
 - `GetProfile()` should be called after connection and, if needed by your flow, after portal auth completes
 - `IsPortalSite()` depends on `window.HApps.isPortal()`. It is an environment signal, not a user-profile fetch.
 
@@ -336,8 +346,8 @@ Use this when auth is handled by your backend.
 - input: backend-generated auth URL
 - result: `AuthPopupData`
 - popup auth supports two success modes:
-- `ticket`: your backend exchanges the ticket for the real session token
-- `cookie`: auth is already completed through cookie session
+  - `ticket`: your backend exchanges the ticket for the real session token
+  - `cookie`: auth is already completed through cookie session
 
 ### `OpenPortalAuthPopup()`
 
@@ -347,6 +357,7 @@ Use this when auth is handled by the portal.
 - result: `bool`
 - follow-up: after success, the portal auth popup completes and updated profile/signature data become available through the SDK flow
 - typical use: call your backend again with the updated `HApps.Web.Signature`
+- already verified profile: returns `true` locally without a popup or a new `AuthCompleted` event
 
 ## Portal Auth Flow
 
@@ -394,18 +405,18 @@ HApps.ConfigureMobile(new HAppsMobileAuthOptions
     ClientId = "your-mobile-client-id",
     RedirectUri = "com.example.game://auth/callback",
     PostLogoutRedirectUri = "com.example.game://logout",
-    Scope = "openid email offline_access",
     DeviceRegisterUrl = "https://portal.igra.rocks/api/v1/mobile/device/register",
     InitSessionUrl = "https://portal.igra.rocks/api/v1/mobile/session/init",
     OidcStartUrl = "https://portal.igra.rocks/api/v1/mobile/oidc/start",
     OidcExchangeUrl = "https://portal.igra.rocks/api/v1/mobile/oidc/exchange",
     OidcLogoutUrl = "https://portal.igra.rocks/api/v1/mobile/oidc/logout",
     CreatePaymentUrl = "https://portal.igra.rocks/api/v1/mobile/payments",
-    HttpTimeoutSeconds = 30
+    HttpTimeoutSeconds = 30,
+    LoginTimeoutMs = 180000
 });
 ```
 
-`HttpTimeoutSeconds` applies to every mobile API request. Logout always removes local credentials, even if the remote logout endpoint is unavailable.
+`HttpTimeoutSeconds` applies separately to every mobile API request. `LoginTimeoutMs` limits the wait for the app deep-link callback after opening the system browser. Logout always removes local credentials, even if the remote logout endpoint is unavailable.
 
 Recommended sequence:
 
@@ -441,6 +452,11 @@ Mobile behavior:
 - if payment creation returns `401 invalid_mobile_session` or `401 mobile_session_expired`, the SDK retries through `InitSessionAsync()`
 - `LogoutAsync()` calls `oidc/logout`, opens the returned logout URL, and clears local mobile device state
 - `CreatePaymentAsync()` only starts checkout and opens `paymentUrl`; payment confirmation stays on the integrator/backend side
+- concurrent `InitSessionAsync()` and `RefreshSessionAsync()` calls share one session operation
+- only one `LoginAsync()` operation can be active; another login attempt fails instead of replacing its callback state
+- logout invalidates queued session work and cancels an active login; shutdown rejects late state updates, although an already started HTTP request may still finish internally
+- native mobile support requires Android API 23 or newer because the default token store uses AES-GCM with Android Keystore
+- `HAppsMobileAuthOptions.Scope` remains for source compatibility but is not sent by this SDK version; the server controls requested OIDC scopes
 
 ## AuthPopupData
 
@@ -480,6 +496,7 @@ Important points:
 
 - `orderId` must already be created by your backend/business layer.
 - `MakePayment()` does not build an order for you.
+- if `MakePayment()` is called again while the previous payment is still active, the second call throws `InvalidOperationException`; the first payment remains active
 - client-side payment success is not enough to grant rewards
 - backend verification is mandatory
 
@@ -499,14 +516,21 @@ Backend must:
 
 1. Validate launch token with the platform.
 2. Create or load the user.
-3. Return user and signature data required by the client flow.
+3. Return the signature expected by JS SDK 1.0.3. User data comes from the platform launch message, not this response.
 
-Example shape:
+JS SDK 1.0.3 sends this request body:
 
 ```json
 {
-  "userData": { "id": "123" },
-  "signatureData": { "signature": "..." }
+  "token": "platform-launch-signature"
+}
+```
+
+Expected response shape:
+
+```json
+{
+  "signature": "..."
 }
 ```
 
@@ -516,6 +540,8 @@ Example shape:
 - `MakePayment()` accepts `orderId`, not `PaymentItem`.
 - `Connect()` and `GetProfile()` may fail if the JS bridge is not correctly wired in the WebGL template.
 - `HApps.init(...)` in the page template and `HApps.Web.Connect()` in Unity are different steps. The first bootstraps the browser bridge, the second waits for the Unity-side bridge connection flow.
+- the embedded `HApps.init(...).ready` promise does not resolve after the initial successful portal login in deployed JS SDK 1.0.3; use Unity `Connect()` as the readiness gate
+- `SetTheaterMode()` is present in the Unity API, but JS SDK 1.0.3 does not dispatch `set_theater_mode`; the call has no effect with the supported browser contract.
 
 ## Security Requirements
 
@@ -529,4 +555,4 @@ Example shape:
 
 ## Version
 
-HApps Web SDK - Integration Guide v2.1
+HApps Unity SDK - Integration Guide v3.0.1 (JS SDK 1.0.3)
