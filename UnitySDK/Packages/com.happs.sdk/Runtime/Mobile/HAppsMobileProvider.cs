@@ -12,6 +12,18 @@ namespace HAppsSDK
 	public sealed class HAppsMobileProvider : HAppsProvider
 	{
 		private const int SessionExpirySkewSeconds = 5;
+		private const int HttpTimeoutSeconds = 30;
+		private const int LoginTimeoutMs = 180000;
+		private const string TokenStorageKeyPrefix = "happs.mobile.state.v1";
+		private const string AuthorityPath = "/idp/oidc";
+		private const string MobileApiPath = "/api/v1/mobile";
+		private const string DeviceRegisterPath = MobileApiPath + "/device/register";
+		private const string InitSessionPath = MobileApiPath + "/session/init";
+		private const string OidcStartPath = MobileApiPath + "/oidc/start";
+		private const string OidcExchangePath = MobileApiPath + "/oidc/exchange";
+		private const string OidcLogoutPath = MobileApiPath + "/oidc/logout";
+		private const string CreatePaymentPath = MobileApiPath + "/payments";
+		private const string CheckUpdatePath = MobileApiPath + "/app/check-update";
 
 		private HAppsMobileAuthOptions _options;
 		private IMobileTokenStore _tokenStore = new InMemoryMobileTokenStore();
@@ -35,8 +47,23 @@ namespace HAppsSDK
 		{
 			ThrowIfDisposed();
 			_options = options ?? throw new ArgumentNullException(nameof(options));
-			_tokenStore = tokenStore ?? CreateDefaultTokenStore(_options.PlayerPrefsStorageKey);
+			_tokenStore = tokenStore ?? CreateDefaultTokenStore(BuildTokenStorageKey(_options));
 			HAppsLog.Log("Mobile configured");
+		}
+
+		private static string BuildTokenStorageKey(HAppsMobileAuthOptions options)
+		{
+			var portalUrl = options.PortalUrl?.Trim().TrimEnd('/').ToLowerInvariant() ?? string.Empty;
+			var clientId = options.ClientId?.Trim() ?? string.Empty;
+			var input = Encoding.UTF8.GetBytes($"{portalUrl}|{clientId}");
+
+			using var sha256 = SHA256.Create();
+			var hash = sha256.ComputeHash(input);
+			var suffix = new StringBuilder(24);
+			for (var i = 0; i < 12; i++)
+				suffix.Append(hash[i].ToString("x2"));
+
+			return $"{TokenStorageKeyPrefix}.{suffix}";
 		}
 
 		private static IMobileTokenStore CreateDefaultTokenStore(string storageKey)
@@ -104,7 +131,7 @@ namespace HAppsSDK
 					loginTcs);
 				_deepLinkListener.DeepLinkReceived += onDeepLink;
 
-				using var timeoutCts = new CancellationTokenSource(_options.LoginTimeoutMs);
+				using var timeoutCts = new CancellationTokenSource(LoginTimeoutMs);
 				using var timeoutReg = timeoutCts.Token.Register(() =>
 				{
 					loginTcs.TrySetException(new TimeoutException("Mobile login timed out while waiting for the redirect callback."));
@@ -142,7 +169,7 @@ namespace HAppsSDK
 					return;
 				}
 
-				if (string.IsNullOrWhiteSpace(tokenSet.IdToken) || string.IsNullOrWhiteSpace(_options.OidcLogoutUrl))
+				if (string.IsNullOrWhiteSpace(tokenSet.IdToken))
 				{
 					await ClearLocalStateAsync();
 					return;
@@ -168,9 +195,9 @@ namespace HAppsSDK
 					};
 
 					var response = await SendJsonPostAsync<OidcLogoutRequest, OidcLogoutResponse>(
-						_options.OidcLogoutUrl,
+						BuildPortalUrl(OidcLogoutPath),
 						request,
-						_options.HttpTimeoutSeconds);
+						HttpTimeoutSeconds);
 					if (response == null || string.IsNullOrWhiteSpace(response.logoutUrl))
 						throw new InvalidOperationException("OIDC logout response is invalid.");
 
@@ -238,13 +265,13 @@ namespace HAppsSDK
 
 			var stateVersion = CaptureStateVersion();
 			var response = await SendJsonPostAsync<CheckUpdateRequest, CheckUpdateResponse>(
-				_options.CheckUpdateUrl,
+				BuildPortalUrl(CheckUpdatePath),
 				new CheckUpdateRequest
 				{
 					clientId = _options.ClientId,
 					versionCode = versionCode
 				},
-				_options.HttpTimeoutSeconds);
+				HttpTimeoutSeconds);
 			ThrowIfStateInvalid(stateVersion);
 
 			if (response == null)
@@ -316,17 +343,7 @@ namespace HAppsSDK
 			if (string.IsNullOrWhiteSpace(_options.ClientId))
 				throw new InvalidOperationException("Mobile auth ClientId is not configured.");
 
-			if (string.IsNullOrWhiteSpace(_options.DeviceRegisterUrl))
-				throw new InvalidOperationException("Mobile device register endpoint is not configured.");
-
-			if (string.IsNullOrWhiteSpace(_options.InitSessionUrl))
-				throw new InvalidOperationException("Mobile init session endpoint is not configured.");
-
-			if (_options.HttpTimeoutSeconds <= 0)
-				throw new InvalidOperationException("Mobile HTTP timeout must be greater than zero.");
-
-			if (_options.LoginTimeoutMs <= 0)
-				throw new InvalidOperationException("Mobile login timeout must be greater than zero.");
+			EnsurePortalUrlConfigured();
 		}
 
 		private void EnsureUpdateCheckConfigured()
@@ -339,11 +356,27 @@ namespace HAppsSDK
 			if (string.IsNullOrWhiteSpace(_options.ClientId))
 				throw new InvalidOperationException("Mobile auth ClientId is not configured.");
 
-			if (string.IsNullOrWhiteSpace(_options.CheckUpdateUrl))
-				throw new InvalidOperationException("Mobile check update endpoint is not configured.");
+			EnsurePortalUrlConfigured();
+		}
 
-			if (_options.HttpTimeoutSeconds <= 0)
-				throw new InvalidOperationException("Mobile HTTP timeout must be greater than zero.");
+		private void EnsurePortalUrlConfigured()
+		{
+			if (string.IsNullOrWhiteSpace(_options.PortalUrl))
+				throw new InvalidOperationException("Mobile PortalUrl is not configured.");
+
+			var portalUrl = _options.PortalUrl.Trim();
+			if (!Uri.TryCreate(portalUrl, UriKind.Absolute, out var portalUri) ||
+				(portalUri.Scheme != Uri.UriSchemeHttps && portalUri.Scheme != Uri.UriSchemeHttp) ||
+				!string.IsNullOrEmpty(portalUri.Query) ||
+				!string.IsNullOrEmpty(portalUri.Fragment))
+			{
+				throw new InvalidOperationException("Mobile PortalUrl must be an absolute HTTP or HTTPS URL without a query or fragment.");
+			}
+		}
+
+		private string BuildPortalUrl(string path)
+		{
+			return $"{_options.PortalUrl.Trim().TrimEnd('/')}{path}";
 		}
 
 		private int CaptureStateVersion()
@@ -470,14 +503,8 @@ namespace HAppsSDK
 
 		private void EnsureOidcConfigured()
 		{
-			if (string.IsNullOrWhiteSpace(_options.Authority))
-				throw new InvalidOperationException("Mobile auth Authority is not configured.");
 			if (string.IsNullOrWhiteSpace(_options.RedirectUri))
 				throw new InvalidOperationException("Mobile auth RedirectUri is not configured.");
-			if (string.IsNullOrWhiteSpace(_options.OidcStartUrl))
-				throw new InvalidOperationException("Mobile OIDC start endpoint is not configured.");
-			if (string.IsNullOrWhiteSpace(_options.OidcExchangeUrl))
-				throw new InvalidOperationException("Mobile OIDC exchange endpoint is not configured.");
 			if (string.IsNullOrWhiteSpace(_options.PostLogoutRedirectUri))
 				throw new InvalidOperationException("Mobile PostLogoutRedirectUri is not configured.");
 		}
@@ -501,9 +528,6 @@ namespace HAppsSDK
 			string accessToken,
 			int stateVersion)
 		{
-			if (string.IsNullOrWhiteSpace(_options.CreatePaymentUrl))
-				throw new InvalidOperationException("Portal create payment endpoint is not configured.");
-
 			var payload = new CreatePaymentPayload
 			{
 				productId = request.ProductId,
@@ -516,10 +540,10 @@ namespace HAppsSDK
 			var json = JsonUtility.ToJson(payload);
 			HAppsLog.Log("Creating mobile payment");
 			var responseText = await SendAuthorizedJsonPostAsync(
-				_options.CreatePaymentUrl,
+				BuildPortalUrl(CreatePaymentPath),
 				accessToken,
 				json,
-				_options.HttpTimeoutSeconds);
+				HttpTimeoutSeconds);
 			ThrowIfStateInvalid(stateVersion);
 			var response = JsonUtility.FromJson<CreatePaymentResponse>(responseText);
 			if (response == null || string.IsNullOrWhiteSpace(response.orderId) || string.IsNullOrWhiteSpace(response.paymentUrl))
@@ -581,10 +605,10 @@ namespace HAppsSDK
 			if (_discovery != null)
 				return _discovery;
 
-			var authority = _options.Authority.TrimEnd('/');
+			var authority = BuildPortalUrl(AuthorityPath);
 			var url = $"{authority}/.well-known/openid-configuration";
 			HAppsLog.Log("Loading OIDC discovery");
-			var json = await SendGetAsync(url, _options.HttpTimeoutSeconds);
+			var json = await SendGetAsync(url, HttpTimeoutSeconds);
 			ThrowIfStateInvalid(stateVersion);
 			var discovery = JsonUtility.FromJson<OidcDiscoveryDocument>(json);
 
@@ -615,9 +639,9 @@ namespace HAppsSDK
 
 			HAppsLog.Log("Requesting mobile session");
 			var response = await SendJsonPostAsync<InitSessionRequest, InitSessionResponse>(
-				_options.InitSessionUrl,
+				BuildPortalUrl(InitSessionPath),
 				payload,
-				_options.HttpTimeoutSeconds);
+				HttpTimeoutSeconds);
 			ThrowIfStateInvalid(stateVersion);
 			if (response == null || string.IsNullOrWhiteSpace(response.accessToken) || string.IsNullOrWhiteSpace(response.publicId))
 				throw new InvalidOperationException("Portal initSession response is invalid.");
@@ -653,9 +677,9 @@ namespace HAppsSDK
 
 			HAppsLog.Log("Registering mobile device");
 			var response = await SendJsonPostAsync<RegisterDeviceRequest, RegisterDeviceResponse>(
-				_options.DeviceRegisterUrl,
+				BuildPortalUrl(DeviceRegisterPath),
 				request,
-				_options.HttpTimeoutSeconds);
+				HttpTimeoutSeconds);
 			ThrowIfStateInvalid(stateVersion);
 			if (response == null || string.IsNullOrWhiteSpace(response.deviceId))
 				throw new InvalidOperationException("Device register response is invalid.");
@@ -691,9 +715,9 @@ namespace HAppsSDK
 
 			HAppsLog.Log("Starting mobile OIDC");
 			var response = await SendJsonPostAsync<OidcStartRequest, OidcStartResponse>(
-				_options.OidcStartUrl,
+				BuildPortalUrl(OidcStartPath),
 				request,
-				_options.HttpTimeoutSeconds);
+				HttpTimeoutSeconds);
 			ThrowIfStateInvalid(stateVersion);
 			if (response == null || string.IsNullOrWhiteSpace(response.authorizationUrl) || string.IsNullOrWhiteSpace(response.state))
 				throw new InvalidOperationException("OIDC start response is invalid.");
@@ -751,7 +775,7 @@ namespace HAppsSDK
 					code,
 					_options.RedirectUri,
 					codeVerifier,
-					_options.HttpTimeoutSeconds);
+					HttpTimeoutSeconds);
 				ThrowIfStateInvalid(stateVersion);
 
 				if (string.IsNullOrWhiteSpace(oidcTokens.id_token))
@@ -830,9 +854,9 @@ namespace HAppsSDK
 
 			HAppsLog.Log("Exchanging mobile OIDC session");
 			var response = await SendJsonPostAsync<OidcExchangeRequest, OidcExchangeResponse>(
-				_options.OidcExchangeUrl,
+				BuildPortalUrl(OidcExchangePath),
 				request,
-				_options.HttpTimeoutSeconds);
+				HttpTimeoutSeconds);
 			ThrowIfStateInvalid(stateVersion);
 			if (response == null || !response.ok)
 				throw new InvalidOperationException("OIDC exchange response is invalid.");

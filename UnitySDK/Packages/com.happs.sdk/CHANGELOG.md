@@ -4,6 +4,8 @@
 
 - Add Android app update checks through `HApps.Mobile.CheckForUpdateAsync(versionCode)`
 - Return the server update flags and release metadata through `MobileCheckUpdateResult`
+- Derive mobile API endpoints from `PortalUrl` and keep network timeouts internal to the SDK
+- Isolate default mobile credential storage by `PortalUrl` and `ClientId`
 
 ## 3.0.1
 

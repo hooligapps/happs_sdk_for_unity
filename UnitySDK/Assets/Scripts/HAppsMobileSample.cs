@@ -7,14 +7,11 @@ using UnityEngine;
 public sealed class HAppsMobileSample : MonoBehaviour
 {
     [Header("Server Flow")]
+    [SerializeField] private string portalUrl = "https://portal.igra.rocks";
     [SerializeField] private string clientId = "lustage-mobile";
-    [SerializeField] private string deviceRegisterEndpoint = "https://portal.igra.rocks/api/v1/mobile/device/register";
-    [SerializeField] private string initSessionEndpoint = "https://portal.igra.rocks/api/v1/mobile/session/init";
-    [SerializeField] private string oidcStartEndpoint = "https://portal.igra.rocks/api/v1/mobile/oidc/start";
-    [SerializeField] private string oidcExchangeEndpoint = "https://portal.igra.rocks/api/v1/mobile/oidc/exchange";
-    [SerializeField] private string oidcLogoutEndpoint = "https://portal.igra.rocks/api/v1/mobile/oidc/logout";
-    [SerializeField] private string createPaymentEndpoint = "https://portal.igra.rocks/api/v1/mobile/payments";
-    [SerializeField] private string checkUpdateEndpoint = "https://portal.igra.rocks/api/v1/mobile/app/check-update";
+
+    [Header("Update Test Data")]
+    [SerializeField] private int versionCode = 101;
 
     [Header("Payment Test Data")]
     [SerializeField] private string productId = "test-product";
@@ -45,6 +42,7 @@ public sealed class HAppsMobileSample : MonoBehaviour
     private bool _isLoggedIn;
     private string _socialId = "-";
     private bool _isLoginInFlight;
+    private bool _isCheckUpdateInFlight;
 
     private void OnEnable()
     {
@@ -78,17 +76,10 @@ public sealed class HAppsMobileSample : MonoBehaviour
 
             HApps.ConfigureMobile(new HAppsMobileAuthOptions
             {
-                Authority = "https://portal.igra.rocks/idp/oidc",
+                PortalUrl = portalUrl,
                 ClientId = clientId,
                 RedirectUri = "com.hooligapps.lustage://auth/callback",
-                PostLogoutRedirectUri = "com.hooligapps.lustage://logout",
-                DeviceRegisterUrl = deviceRegisterEndpoint,
-                InitSessionUrl = initSessionEndpoint,
-                OidcStartUrl = oidcStartEndpoint,
-                OidcExchangeUrl = oidcExchangeEndpoint,
-                OidcLogoutUrl = oidcLogoutEndpoint,
-                CreatePaymentUrl = createPaymentEndpoint,
-                CheckUpdateUrl = checkUpdateEndpoint
+                PostLogoutRedirectUri = "com.hooligapps.lustage://logout"
             });
 
             _isConfigured = true;
@@ -137,6 +128,33 @@ public sealed class HAppsMobileSample : MonoBehaviour
         finally
         {
             _isLoginInFlight = false;
+        }
+    }
+
+    public async void CheckUpdate()
+    {
+        if (!EnsureConfigured())
+            return;
+
+        if (_isCheckUpdateInFlight)
+            return;
+
+        ResetScrollInteraction();
+        _isCheckUpdateInFlight = true;
+        try
+        {
+            AddLogSeparator("CHECK UPDATE");
+            LogStatus($"Starting checkUpdate: versionCode={versionCode}");
+            var result = await HApps.Mobile.CheckForUpdateAsync(versionCode);
+            LogStatus($"checkUpdate: updateAvailable={result.UpdateAvailable}, required={result.Required}, latestVersionCode={result.LatestVersionCode}, latestVersionName={result.LatestVersionName}, downloadUrl={result.DownloadUrl}, sha256={result.Sha256 ?? "-"}, releaseNotes={result.ReleaseNotes ?? "-"}");
+        }
+        catch (Exception ex)
+        {
+            LogError($"checkUpdate failed: {ex}");
+        }
+        finally
+        {
+            _isCheckUpdateInFlight = false;
         }
     }
 
@@ -294,6 +312,11 @@ public sealed class HAppsMobileSample : MonoBehaviour
         GUILayout.Label($"Social ID: {_socialId}", GetStatusStyle());
         GUILayout.Space(gap);
 
+        GUILayout.Label("App Update", GetSectionStyle());
+        if (GUILayout.Button(_isCheckUpdateInFlight ? "Checking Update..." : "Check Update", GetButtonStyle(), GUILayout.Height(lineHeight)) && !_isCheckUpdateInFlight)
+            CheckUpdate();
+
+        GUILayout.Space(gap);
         GUILayout.Label("Portal Session Flow", GetSectionStyle());
 
         if (_isLoggedIn)

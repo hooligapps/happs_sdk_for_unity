@@ -369,11 +369,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4d93219acb154b0eb8fd5e2fd5a80e6d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HAppsMobileSample
-  configEndpoint: https://portal.igra.rocks/sandbox/mobile/config
+  portalUrl: https://portal.igra.rocks
   clientId: lustage-mobile
-  initSessionEndpoint: https://portal.igra.rocks/api/v1/mobile/session/init
-  refreshSessionEndpoint: https://portal.igra.rocks/api/v1/mobile/session/refresh
-  createPaymentEndpoint: https://portal.igra.rocks/api/v1/mobile/payments
+  versionCode: 102
   productId: test-product
   price: 1.99
   currency: USD
@@ -428,6 +426,8 @@ MonoBehaviour:
   launchToken: 
   orderId: 
   showDebugGui: 1
+  adultMode: 1
+  theaterModeEnabled: 1
 --- !u!4 &1929340996
 Transform:
   m_ObjectHideFlags: 0
