@@ -230,6 +230,47 @@ namespace HAppsSDK
 			}
 		}
 
+		public async Task<MobileCheckUpdateResult> CheckForUpdateAsync(int versionCode)
+		{
+			EnsureUpdateCheckConfigured();
+			if (versionCode <= 0)
+				throw new ArgumentOutOfRangeException(nameof(versionCode), "Android version code must be greater than zero.");
+
+			var stateVersion = CaptureStateVersion();
+			var response = await SendJsonPostAsync<CheckUpdateRequest, CheckUpdateResponse>(
+				_options.CheckUpdateUrl,
+				new CheckUpdateRequest
+				{
+					clientId = _options.ClientId,
+					versionCode = versionCode
+				},
+				_options.HttpTimeoutSeconds);
+			ThrowIfStateInvalid(stateVersion);
+
+			if (response == null)
+				throw new InvalidOperationException("Check update response is empty.");
+
+			if (response.latestVersionCode <= 0 ||
+				string.IsNullOrWhiteSpace(response.latestVersionName) ||
+				string.IsNullOrWhiteSpace(response.downloadUrl) ||
+				(response.updateAvailable && response.latestVersionCode <= versionCode) ||
+				(response.required && !response.updateAvailable))
+			{
+				throw new InvalidOperationException("Check update response is invalid.");
+			}
+
+			return new MobileCheckUpdateResult
+			{
+				UpdateAvailable = response.updateAvailable,
+				Required = response.required,
+				LatestVersionCode = response.latestVersionCode,
+				LatestVersionName = response.latestVersionName,
+				DownloadUrl = response.downloadUrl,
+				Sha256 = response.sha256,
+				ReleaseNotes = response.releaseNotes
+			};
+		}
+
 		public override void Dispose()
 		{
 			TaskCompletionSource<MobileLoginResult> loginTcs;
@@ -286,6 +327,23 @@ namespace HAppsSDK
 
 			if (_options.LoginTimeoutMs <= 0)
 				throw new InvalidOperationException("Mobile login timeout must be greater than zero.");
+		}
+
+		private void EnsureUpdateCheckConfigured()
+		{
+			ThrowIfDisposed();
+
+			if (_options == null)
+				throw new InvalidOperationException("Call HApps.ConfigureMobile(...) before using HApps.Mobile.");
+
+			if (string.IsNullOrWhiteSpace(_options.ClientId))
+				throw new InvalidOperationException("Mobile auth ClientId is not configured.");
+
+			if (string.IsNullOrWhiteSpace(_options.CheckUpdateUrl))
+				throw new InvalidOperationException("Mobile check update endpoint is not configured.");
+
+			if (_options.HttpTimeoutSeconds <= 0)
+				throw new InvalidOperationException("Mobile HTTP timeout must be greater than zero.");
 		}
 
 		private int CaptureStateVersion()
@@ -1455,6 +1513,25 @@ namespace HAppsSDK
 		{
 			public string orderId;
 			public string paymentUrl;
+		}
+
+		[Serializable]
+		private sealed class CheckUpdateRequest
+		{
+			public string clientId;
+			public int versionCode;
+		}
+
+		[Serializable]
+		private sealed class CheckUpdateResponse
+		{
+			public bool updateAvailable;
+			public bool required;
+			public int latestVersionCode;
+			public string latestVersionName;
+			public string downloadUrl;
+			public string sha256;
+			public string releaseNotes;
 		}
 
 		[Serializable]

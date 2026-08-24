@@ -14,6 +14,7 @@ public sealed class HAppsMobileSample : MonoBehaviour
     [SerializeField] private string oidcExchangeEndpoint = "https://portal.igra.rocks/api/v1/mobile/oidc/exchange";
     [SerializeField] private string oidcLogoutEndpoint = "https://portal.igra.rocks/api/v1/mobile/oidc/logout";
     [SerializeField] private string createPaymentEndpoint = "https://portal.igra.rocks/api/v1/mobile/payments";
+    [SerializeField] private string checkUpdateEndpoint = "https://portal.igra.rocks/api/v1/mobile/app/check-update";
 
     [Header("Payment Test Data")]
     [SerializeField] private string productId = "test-product";
@@ -81,13 +82,13 @@ public sealed class HAppsMobileSample : MonoBehaviour
                 ClientId = clientId,
                 RedirectUri = "com.hooligapps.lustage://auth/callback",
                 PostLogoutRedirectUri = "com.hooligapps.lustage://logout",
-                Scope = "openid email offline_access",
                 DeviceRegisterUrl = deviceRegisterEndpoint,
                 InitSessionUrl = initSessionEndpoint,
                 OidcStartUrl = oidcStartEndpoint,
                 OidcExchangeUrl = oidcExchangeEndpoint,
                 OidcLogoutUrl = oidcLogoutEndpoint,
-                CreatePaymentUrl = createPaymentEndpoint
+                CreatePaymentUrl = createPaymentEndpoint,
+                CheckUpdateUrl = checkUpdateEndpoint
             });
 
             _isConfigured = true;

@@ -1,13 +1,13 @@
-# WebGL Migration: Unity SDK 2.0.6 to 3.0.1
+# WebGL Migration: Unity SDK 2.0.6 to 3.1.0
 
 This guide covers WebGL integrations only. Native Android APIs added in 3.x are not required for an existing web game.
 
 The supported combination after migration is:
 
-- HApps Unity SDK `3.0.1`
+- HApps Unity SDK `3.1.0`
 - HApps browser JS SDK `1.0.3`
 
-Do not combine Unity SDK 3.0.1 with an unversioned browser script or a different JS SDK contract.
+Do not combine Unity SDK 3.1.0 with an unversioned browser script or a different JS SDK contract.
 
 ## 1. Update The Unity Package
 
@@ -17,7 +17,7 @@ Change the package tag in `Packages/manifest.json`:
 {
   "dependencies": {
 -    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v2.0.6"
-+    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.0.1"
++    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.1.0"
   }
 }
 ```
@@ -26,9 +26,9 @@ Allow Unity to resolve and recompile the package before changing game code. The 
 
 ## 2. Move Web Calls Under `HApps.Web`
 
-Version 3.0.1 removes the flat web shortcuts from the static `HApps` facade. All web operations, web state, and the web auth event now belong to `HApps.Web`.
+Starting with version 3.0.0, the flat web shortcuts are removed from the static `HApps` facade. In 3.1.0, all web operations, web state, and the web auth event belong to `HApps.Web`.
 
-| SDK 2.0.6 | SDK 3.0.1 |
+| SDK 2.0.6 | SDK 3.1.0 |
 | --- | --- |
 | `HApps.Connect()` | `HApps.Web.Connect()` |
 | `HApps.GetProfile()` | `HApps.Web.GetProfile()` |
@@ -71,7 +71,7 @@ var profile = await HApps.GetProfile();
 var payment = await HApps.MakePayment(orderId);
 ```
 
-### After: SDK 3.0.1
+### After: SDK 3.1.0
 
 ```csharp
 using HAppsSDK;
@@ -263,7 +263,7 @@ Keep the event subscription only when the game must also react to external `auth
 
 ## 6. Migration Checklist
 
-- package URL points to `#v3.0.1`
+- package URL points to `#v3.1.0`
 - browser script URL contains `/sdk/1.0.3/`
 - all web calls use `HApps.Web.*`
 - no code references `HApps.Provider`

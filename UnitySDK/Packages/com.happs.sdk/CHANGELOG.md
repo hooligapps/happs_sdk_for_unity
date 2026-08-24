@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.1.0
+
+- Add Android app update checks through `HApps.Mobile.CheckForUpdateAsync(versionCode)`
+- Return the server update flags and release metadata through `MobileCheckUpdateResult`
+
 ## 3.0.1
 
 - Keep compatibility with the existing HApps JS SDK 1.0.3 contract

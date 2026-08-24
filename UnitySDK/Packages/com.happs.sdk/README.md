@@ -1,6 +1,6 @@
 # HApps Unity SDK
 
-Unity SDK 3.0.1 for HApps WebGL integrations through JS SDK 1.0.3 and native Android integrations.
+Unity SDK 3.1.0 for HApps WebGL integrations through JS SDK 1.0.3 and native Android integrations.
 
 ## Installation
 
@@ -9,14 +9,14 @@ Add the package to your Unity project through `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.0.1"
+    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.1.0"
   }
 }
 ```
 
-Use a release tag such as `v3.0.1`. During development you can temporarily point to a commit hash instead of a tag.
+Use a release tag such as `v3.1.0`. During development you can temporarily point to a commit hash instead of a tag.
 
-For an existing WebGL project, follow [WebGL Migration: SDK 2.0.6 to 3.0.1](MIGRATION_WEB_2.0.6_TO_3.0.1.md).
+For an existing WebGL project, follow [WebGL Migration: SDK 2.0.6 to 3.1.0](MIGRATION_WEB_2.0.6_TO_3.1.0.md).
 
 ## Runtime API
 
@@ -36,6 +36,7 @@ Task<MobileSession> HApps.Mobile.InitSessionAsync()
 Task<MobileLoginResult> HApps.Mobile.LoginAsync()
 Task<MobileSession> HApps.Mobile.RefreshSessionAsync()
 Task<MobileCreatePaymentResult> HApps.Mobile.CreatePaymentAsync(MobileCreatePaymentRequest request)
+Task<MobileCheckUpdateResult> HApps.Mobile.CheckForUpdateAsync(int versionCode)
 Task HApps.Mobile.LogoutAsync()
 
 void HApps.ConfigureMobile(HAppsMobileAuthOptions options, IMobileTokenStore tokenStore = null)
@@ -48,7 +49,7 @@ void HApps.Shutdown()
 Your WebGL page must:
 
 - load `https://hooli.games/public/js/sdk/1.0.3/hooligapps.js` or `https://hooli.games/public/js/sdk/1.0.3/hooligapps.debug.js`
-- use the existing JS SDK `1.0.3` contract; unversioned builds are not supported by Unity SDK `3.0.1`
+- use the existing JS SDK `1.0.3` contract; unversioned builds are not supported by Unity SDK `3.1.0`
 - initialize the browser bridge with `HApps.init(...)`
 - use `unityObjectName: "HAppsJSBridge"`
 - use `unityMethodName: "OnMessage"`
@@ -105,6 +106,7 @@ private void HandleAuthCompleted(UserData user, SignatureData signature)
 
 The mobile provider uses:
 
+- app update checks before session bootstrap
 - portal session bootstrap through `initSession`
 - OIDC Authorization Code + PKCE for user login
 - deep link callback back into the app
@@ -125,10 +127,21 @@ HApps.ConfigureMobile(new HAppsMobileAuthOptions
     OidcExchangeUrl = "https://portal.igra.rocks/api/v1/mobile/oidc/exchange",
     OidcLogoutUrl = "https://portal.igra.rocks/api/v1/mobile/oidc/logout",
     CreatePaymentUrl = "https://portal.igra.rocks/api/v1/mobile/payments",
+    CheckUpdateUrl = "https://portal.igra.rocks/api/v1/mobile/app/check-update",
     HttpTimeoutSeconds = 30,
     LoginTimeoutMs = 180000
 });
 ```
+
+Check for an Android app update before starting the session flow:
+
+```csharp
+var update = await HApps.Mobile.CheckForUpdateAsync(101);
+```
+
+The request uses the configured `ClientId` and the supplied Android `versionCode`. It does not initialize a device session or send an access token. The SDK returns the server fields as `UpdateAvailable`, `Required`, `LatestVersionCode`, `LatestVersionName`, `DownloadUrl`, `Sha256`, and `ReleaseNotes`.
+
+The endpoint receives `{ "clientId": "...", "versionCode": 101 }`. The SDK returns the response flags and release metadata but does not download the APK or validate its SHA-256.
 
 `HttpTimeoutSeconds` applies separately to every mobile API request. `LoginTimeoutMs` limits the wait for the app deep-link callback after opening the system browser. Logout always removes local credentials, even if the remote logout endpoint is unavailable.
 
@@ -162,6 +175,7 @@ Notes:
 - Android is the only supported native mobile runtime in this release
 - Android API 23 or newer is required by the default AES-GCM Android Keystore token store
 - `InitSessionAsync()` ensures a device keypair exists, registers the device if needed, then calls signed `session/init`
+- `CheckForUpdateAsync(versionCode)` calls the configured update endpoint without creating or refreshing a mobile session
 - concurrent `InitSessionAsync()` and `RefreshSessionAsync()` calls share one session operation
 - `LoginAsync()` starts OIDC login through `oidc/start`, exchanges the authorization `code`, then calls `oidc/exchange` and a fresh `session/init`
 - only one `LoginAsync()` operation can be active; another login attempt fails instead of replacing its callback state

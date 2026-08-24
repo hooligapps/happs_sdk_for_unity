@@ -1,6 +1,6 @@
 # HApps Unity SDK
 
-Unity SDK 3.0.1 for HApps WebGL integrations through JS SDK 1.0.3 and native Android integrations.
+Unity SDK 3.1.0 for HApps WebGL integrations through JS SDK 1.0.3 and native Android integrations.
 
 ## Installation
 
@@ -9,7 +9,7 @@ Add the package to your Unity project through `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.0.1"
+    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.1.0"
   }
 }
 ```
@@ -18,13 +18,13 @@ The SDK is distributed as a Unity package from:
 
 - `UnitySDK/Packages/com.happs.sdk`
 
-Upgrading an existing WebGL integration from SDK 2.0.6: see [WebGL Migration: 2.0.6 to 3.0.1](UnitySDK/Packages/com.happs.sdk/MIGRATION_WEB_2.0.6_TO_3.0.1.md).
+Upgrading an existing WebGL integration from SDK 2.0.6: see [WebGL Migration: 2.0.6 to 3.1.0](UnitySDK/Packages/com.happs.sdk/MIGRATION_WEB_2.0.6_TO_3.1.0.md).
 
 This SDK supports three distinct integration modes:
 
 1. Standalone WebGL auth via backend IDP popup
 2. Embedded portal integration via JS bridge
-3. Native Android session, OIDC login, and payment creation
+3. Native Android update checks, session, OIDC login, and payment creation
 
 ## Supported Public API
 
@@ -46,6 +46,7 @@ Task<MobileSession> HApps.Mobile.InitSessionAsync()
 Task<MobileLoginResult> HApps.Mobile.LoginAsync()
 Task<MobileSession> HApps.Mobile.RefreshSessionAsync()
 Task<MobileCreatePaymentResult> HApps.Mobile.CreatePaymentAsync(MobileCreatePaymentRequest request)
+Task<MobileCheckUpdateResult> HApps.Mobile.CheckForUpdateAsync(int versionCode)
 Task HApps.Mobile.LogoutAsync()
 void HApps.ConfigureMobile(HAppsMobileAuthOptions options, IMobileTokenStore tokenStore = null)
 void HApps.SetDebugLogging(bool enabled)
@@ -390,8 +391,9 @@ if (profile != null)
 
 ## Mobile Flow
 
-The mobile provider is built around three separate responsibilities:
+The mobile provider is built around four separate responsibilities:
 
+- app update checks before session bootstrap
 - portal session bootstrap
 - OIDC login in the system browser
 - payment creation that opens checkout in the browser
@@ -411,10 +413,30 @@ HApps.ConfigureMobile(new HAppsMobileAuthOptions
     OidcExchangeUrl = "https://portal.igra.rocks/api/v1/mobile/oidc/exchange",
     OidcLogoutUrl = "https://portal.igra.rocks/api/v1/mobile/oidc/logout",
     CreatePaymentUrl = "https://portal.igra.rocks/api/v1/mobile/payments",
+    CheckUpdateUrl = "https://portal.igra.rocks/api/v1/mobile/app/check-update",
     HttpTimeoutSeconds = 30,
     LoginTimeoutMs = 180000
 });
 ```
+
+Check for an Android app update before starting the session flow:
+
+```csharp
+var update = await HApps.Mobile.CheckForUpdateAsync(101);
+```
+
+The request uses the configured `ClientId` and the supplied Android `versionCode`. The endpoint is public from the SDK perspective: this call does not initialize a device session and does not send an access token. The SDK returns the server fields as `UpdateAvailable`, `Required`, `LatestVersionCode`, `LatestVersionName`, `DownloadUrl`, `Sha256`, and `ReleaseNotes`.
+
+Wire request:
+
+```json
+{
+  "clientId": "lustage-mobile",
+  "versionCode": 101
+}
+```
+
+Downloading the APK and validating its SHA-256 when supplied are the responsibility of the application; the SDK only returns the server response.
 
 `HttpTimeoutSeconds` applies separately to every mobile API request. `LoginTimeoutMs` limits the wait for the app deep-link callback after opening the system browser. Logout always removes local credentials, even if the remote logout endpoint is unavailable.
 
@@ -446,6 +468,7 @@ var payment = await HApps.Mobile.CreatePaymentAsync(new MobileCreatePaymentReque
 Mobile behavior:
 
 - `InitSessionAsync()` ensures a device keypair exists, registers the device if needed, then calls portal `device/register` and signed `session/init`
+- `CheckForUpdateAsync(versionCode)` calls the configured update endpoint without creating or refreshing a mobile session
 - `LoginAsync()` runs OIDC Authorization Code + PKCE, calls `oidc/start`, exchanges the returned `code` for `id_token`, then calls `oidc/exchange` and a fresh `session/init`
 - after `oidc/exchange`, the SDK switches the device to the new account-linked mobile session
 - `CreatePaymentAsync()` sends the current portal access token in `Authorization: Bearer ...`
@@ -555,4 +578,4 @@ Expected response shape:
 
 ## Version
 
-HApps Unity SDK - Integration Guide v3.0.1 (JS SDK 1.0.3)
+HApps Unity SDK - Integration Guide v3.1.0 (JS SDK 1.0.3)
