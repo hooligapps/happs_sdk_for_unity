@@ -1,6 +1,6 @@
 # HApps Unity SDK
 
-Unity SDK 3.1.0 for HApps WebGL integrations through JS SDK 1.0.3 and native Android integrations.
+Unity SDK 3.1.1 for HApps WebGL integrations through JS SDK 1.1.0 and native Android integrations.
 
 ## Installation
 
@@ -9,14 +9,14 @@ Add the package to your Unity project through `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.1.0"
+    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.1.1"
   }
 }
 ```
 
-Use a release tag such as `v3.1.0`. During development you can temporarily point to a commit hash instead of a tag.
+Use a release tag such as `v3.1.1`. During development you can temporarily point to a commit hash instead of a tag.
 
-For an existing WebGL project, follow [WebGL Migration: SDK 2.0.6 to 3.1.0](MIGRATION_WEB_2.0.6_TO_3.1.0.md).
+For an existing WebGL project, follow [WebGL Migration: SDK 2.0.6 to 3.1.1](MIGRATION_WEB_2.0.6_TO_3.1.1.md).
 
 For native Android integration, follow [Mobile Integration](MOBILE_INTEGRATION.md).
 
@@ -50,17 +50,16 @@ void HApps.Shutdown()
 
 Your WebGL page must:
 
-- load `https://hooli.games/public/js/sdk/1.0.3/hooligapps.js` or `https://hooli.games/public/js/sdk/1.0.3/hooligapps.debug.js`
-- use the existing JS SDK `1.0.3` contract; unversioned builds are not supported by Unity SDK `3.1.0`
-- initialize the browser bridge with `HApps.init(...)`
-- use `unityObjectName: "HAppsJSBridge"`
-- use `unityMethodName: "OnMessage"`
+- load `https://cdn.hooli.games/sdk/1.1.0/hooligapps.js`
+- use the JS SDK `1.1.0` contract; unversioned builds are not supported by Unity SDK `3.1.1`
+- initialize the core client with `HApps.init(...)`
+- attach Unity with `HApps.unity.attach(...)`
+- use `objectName: "HAppsJSBridge"`
+- use `methodName: "OnMessage"`
 - set `isPortal: false` for standalone pages
 - set `isPortal: true` and provide `ssoLoginUrl` for embedded portal pages
 
-`debug` is not an `HApps.init(...)` option in JS SDK 1.0.3. Load `hooligapps.debug.js` instead of `hooligapps.js` when browser-side debug output is needed. In standalone mode, the bridge `ready` promise resolves immediately with `user: null`; authentication is performed through `OpenIdpAuthPopup(url)`.
-
-Do not use the embedded `HApps.init(...).ready` promise as the Unity readiness gate with deployed JS SDK 1.0.3: its initial successful portal login does not resolve that promise. Use `await HApps.Web.Connect()` in Unity instead.
+Set `debug: true` in `HApps.init(...)` when browser-side logging is required. In standalone mode, the `ready` promise resolves immediately with `user: null`; authentication is performed through `OpenIdpAuthPopup(url)`.
 
 ## Web Integration Modes
 
@@ -83,7 +82,7 @@ Embedded portal flow:
 
 If the connected profile is already verified, `OpenPortalAuthPopup()` returns `true` locally without opening a popup or emitting a new `AuthCompleted` event.
 
-`SetTheaterMode(bool)` remains in the Unity API, but JS SDK 1.0.3 does not dispatch the `set_theater_mode` event. Do not depend on it with the supported browser contract.
+`SetTheaterMode(bool)` is dispatched by JS SDK 1.1.0.
 
 Example subscription:
 
@@ -112,7 +111,7 @@ private void HandleAuthCompleted(UserData user, SignatureData signature)
 - `AuthPopupData` supports both ticket-based and cookie-based session auth
 - `Connect()` and `OpenPortalAuthPopup()` are separate steps
 - `OpenAgeVerification()` is a fire-and-forget bridge call with no completion callback
-- `SetTheaterMode()` has no effect with JS SDK 1.0.3 because that browser version does not dispatch its event
+- `HApps.init(...)` and `HApps.unity.attach(...)` are separate browser-side setup steps
 - debug logging is disabled by default; `SetDebugLogging(true)` enables sanitized debug/warn logs, while errors always log
 - SDK logs never include tokens, authorization codes, signatures, deep-link query strings, or auth request/response bodies
 - `MakePayment()` accepts a backend-created `orderId`

@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.1.1
+
+- Update the WebGL bridge and integration documentation for HApps JS SDK 1.1.0
+- Use the current `HApps.unity.receive(...)` bridge API
+- Document separate core initialization and Unity bridge attachment
+- Document browser logging through the `debug` initialization option
+
 ## 3.1.0
 
 - Add Android app update checks through `HApps.Mobile.CheckForUpdateAsync(versionCode)`

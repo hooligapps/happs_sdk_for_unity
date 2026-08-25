@@ -8,7 +8,7 @@ namespace HAppsSDK
 {
     public sealed class HAppsWebProvider : HAppsProvider
     {
-        public const string Version = "3.1.0";
+        public const string Version = "3.1.1";
 
         public event Action<UserData, SignatureData> AuthCompleted;
         public string Signature { get; private set; }

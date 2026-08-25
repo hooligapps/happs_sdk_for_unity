@@ -1,13 +1,13 @@
-# WebGL Migration: Unity SDK 2.0.6 to 3.1.0
+# WebGL Migration: Unity SDK 2.0.6 to 3.1.1
 
 This guide covers WebGL integrations only. Native Android APIs added in 3.x are not required for an existing web game.
 
 The supported combination after migration is:
 
-- HApps Unity SDK `3.1.0`
-- HApps browser JS SDK `1.0.3`
+- HApps Unity SDK `3.1.1`
+- HApps browser JS SDK `1.1.0`
 
-Do not combine Unity SDK 3.1.0 with an unversioned browser script or a different JS SDK contract.
+Do not combine Unity SDK 3.1.1 with an unversioned browser script or a different JS SDK contract.
 
 ## 1. Update The Unity Package
 
@@ -17,7 +17,7 @@ Change the package tag in `Packages/manifest.json`:
 {
   "dependencies": {
 -    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v2.0.6"
-+    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.1.0"
++    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.1.1"
   }
 }
 ```
@@ -26,9 +26,9 @@ Allow Unity to resolve and recompile the package before changing game code. The 
 
 ## 2. Move Web Calls Under `HApps.Web`
 
-Starting with version 3.0.0, the flat web shortcuts are removed from the static `HApps` facade. In 3.1.0, all web operations, web state, and the web auth event belong to `HApps.Web`.
+Starting with version 3.0.0, the flat web shortcuts are removed from the static `HApps` facade. In 3.1.1, all web operations, web state, and the web auth event belong to `HApps.Web`.
 
-| SDK 2.0.6 | SDK 3.1.0 |
+| SDK 2.0.6 | SDK 3.1.1 |
 | --- | --- |
 | `HApps.Connect()` | `HApps.Web.Connect()` |
 | `HApps.GetProfile()` | `HApps.Web.GetProfile()` |
@@ -71,7 +71,7 @@ var profile = await HApps.GetProfile();
 var payment = await HApps.MakePayment(orderId);
 ```
 
-### After: SDK 3.1.0
+### After: SDK 3.1.1
 
 ```csharp
 using HAppsSDK;
@@ -108,29 +108,21 @@ private void HandleAuthCompleted(UserData user, SignatureData signature)
 
 The handler signature has not changed. Always unsubscribe the same handler to avoid retaining scene objects.
 
-## 4. Pin And Configure JS SDK 1.0.3
+## 4. Pin And Configure JS SDK 1.1.0
 
-Version 2.0.6 documentation used unversioned script URLs. Replace them with an explicit 1.0.3 URL.
-
-Development:
+Version 2.0.6 documentation used unversioned script URLs. Replace them with the explicit 1.1.0 URL:
 
 ```html
-<script src="https://hooli.games/public/js/sdk/1.0.3/hooligapps.debug.js"></script>
+<script src="https://cdn.hooli.games/sdk/1.1.0/hooligapps.js"></script>
 ```
 
-Production:
-
-```html
-<script src="https://hooli.games/public/js/sdk/1.0.3/hooligapps.js"></script>
-```
-
-`debug: true` is not a valid `HApps.init(...)` option in JS SDK 1.0.3. Choose the debug script when browser-side logging is required.
+Set `debug: true` in `HApps.init(...)` when browser-side logging is required.
 
 Keep these Unity bridge names exactly as shown:
 
 ```javascript
-unityObjectName: "HAppsJSBridge",
-unityMethodName: "OnMessage"
+objectName: "HAppsJSBridge",
+methodName: "OnMessage"
 ```
 
 ### Standalone WebGL
@@ -140,10 +132,13 @@ Set `isPortal: false`. A standalone page does not need `ssoLoginUrl` for the IDP
 ```javascript
 HApps.init({
     platformOrigin: "https://hooli.games",
-    isPortal: false,
-    unityObjectName: "HAppsJSBridge",
-    unityMethodName: "OnMessage",
-    gameInstance: unityInstance
+    isPortal: false
+});
+
+HApps.unity.attach({
+    gameInstance: unityInstance,
+    objectName: "HAppsJSBridge",
+    methodName: "OnMessage"
 });
 ```
 
@@ -173,26 +168,22 @@ In standalone mode, the JS `ready` promise resolves immediately with `user: null
 Set `isPortal: true` and provide the backend SSO endpoint:
 
 ```javascript
-HApps.init({
+const { ready } = HApps.init({
     platformOrigin: "https://hooli.games",
     ssoLoginUrl: "https://your-backend.example/api/sign",
-    isPortal: true,
-    unityObjectName: "HAppsJSBridge",
-    unityMethodName: "OnMessage",
-    gameInstance: unityInstance
+    isPortal: true
 });
+
+HApps.unity.attach({
+    gameInstance: unityInstance,
+    objectName: "HAppsJSBridge",
+    methodName: "OnMessage"
+});
+
+ready.catch(console.error);
 ```
 
-With deployed JS SDK 1.0.3, the embedded `HApps.init(...).ready` promise does not resolve after the initial successful portal login. Do not block game startup on it. Use Unity connection as the readiness gate:
-
-```csharp
-var connected = await HApps.Web.Connect();
-if (!connected)
-{
-    // Show an integration error or retry from your game flow.
-    return;
-}
-```
+Use `HApps.Web.Connect()` as the Unity-side connection gate.
 
 The configured `/api/sign` endpoint receives:
 
@@ -218,7 +209,7 @@ The browser obtains user data from the portal launch message. Do not return the 
 
 - `Connect()` and `GetProfile()` time out after 30 seconds.
 - payment, IDP popup, and portal auth operations time out after 180 seconds.
-- profile errors from JS SDK 1.0.3 surface as `HAppsException` instead of leaving `GetProfile()` pending.
+- profile errors from JS SDK 1.1.0 surface as `HAppsException` instead of leaving `GetProfile()` pending.
 - an immediate payment rejection now completes with its returned `PaymentData` instead of waiting indefinitely.
 - calling `MakePayment()` while another payment is active throws `InvalidOperationException`; the original payment remains active.
 - calls through a provider reference retained after `HApps.Shutdown()` throw `ObjectDisposedException`. Access `HApps.Web` again only when intentionally starting a new SDK lifecycle.
@@ -257,30 +248,29 @@ if (authenticated)
 
 Keep the event subscription only when the game must also react to external `auth_complete` messages.
 
-### Theater Mode Limitation
+### Theater Mode
 
-`HApps.Web.SetTheaterMode(bool)` remains in the Unity API for compatibility, but browser JS SDK 1.0.3 does not dispatch its `set_theater_mode` event. The call has no effect with the supported contract. Remove any logic that relies on it succeeding.
+`HApps.Web.SetTheaterMode(bool)` is dispatched by browser JS SDK 1.1.0.
 
 ## 6. Migration Checklist
 
-- package URL points to `#v3.1.0`
-- browser script URL contains `/sdk/1.0.3/`
+- package URL points to `#v3.1.1`
+- browser script URL contains `/sdk/1.1.0/`
 - all web calls use `HApps.Web.*`
 - no code references `HApps.Provider`
 - auth subscriptions use `HApps.Web.AuthCompleted`
 - standalone initialization sets `isPortal: false`
 - embedded initialization sets `isPortal: true` and provides `ssoLoginUrl`
-- `unityObjectName` is `HAppsJSBridge`
-- `unityMethodName` is `OnMessage`
-- no `debug` property is passed to `HApps.init(...)`
-- embedded startup waits for `HApps.Web.Connect()`, not the JS `ready` promise
+- `HApps.unity.attach(...)` uses `objectName: "HAppsJSBridge"`
+- `HApps.unity.attach(...)` uses `methodName: "OnMessage"`
+- browser logging is controlled through the `debug` property of `HApps.init(...)`
+- Unity startup waits for `HApps.Web.Connect()`
 - `/api/sign` accepts `{ token }` and returns `{ signature }`
 - payment and popup calls handle timeout and exception paths
-- game logic does not depend on `SetTheaterMode()` with JS SDK 1.0.3
 
 ## 7. WebGL Smoke Test
 
-After Unity recompiles, create a development WebGL build with `hooligapps.debug.js` and verify:
+After Unity recompiles, create a WebGL build with `debug: true` and verify:
 
 1. The page creates exactly one `HAppsJSBridge` Unity object.
 2. Embedded mode completes `HApps.Web.Connect()` and exposes a non-empty signature when the platform session is valid.

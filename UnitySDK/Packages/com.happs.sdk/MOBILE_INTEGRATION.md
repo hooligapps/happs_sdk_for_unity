@@ -2,7 +2,7 @@
 
 ## 1. Requirements and environments
 
-- HApps Unity SDK `3.1.0`.
+- HApps Unity SDK `3.1.1`.
 - Android API 23 or newer.
 - iOS is not supported.
 
@@ -32,7 +32,7 @@ Add the package to `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.1.0"
+    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.1.1"
   }
 }
 ```

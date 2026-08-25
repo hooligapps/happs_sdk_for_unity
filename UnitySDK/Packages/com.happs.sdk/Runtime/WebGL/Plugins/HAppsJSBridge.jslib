@@ -4,12 +4,14 @@ mergeInto(LibraryManager.library, {
         var jsType = UTF8ToString(typePtr);
         var jsMessage = UTF8ToString(messagePtr);
         
-        if (typeof window.HApps === "undefined" || typeof window.HApps.onUnityEvent !== "function") {
-            console.error("[HApps] window.HApps.onUnityEvent not available");
+        if (typeof window.HApps === "undefined" ||
+            !window.HApps.unity ||
+            typeof window.HApps.unity.receive !== "function") {
+            console.error("[HApps] window.HApps.unity.receive not available");
             return;
         }
 
-        window.HApps.onUnityEvent(jsType, jsMessage);
+        window.HApps.unity.receive(jsType, jsMessage);
     },
     
     _isPortalSite: function () {

@@ -1,6 +1,6 @@
 # HApps Unity SDK
 
-Unity SDK 3.1.0 for HApps WebGL integrations through JS SDK 1.0.3 and native Android integrations.
+Unity SDK 3.1.1 for HApps WebGL integrations through JS SDK 1.1.0 and native Android integrations.
 
 ## Installation
 
@@ -9,7 +9,7 @@ Add the package to your Unity project through `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.1.0"
+    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.1.1"
   }
 }
 ```
@@ -18,7 +18,7 @@ The SDK is distributed as a Unity package from:
 
 - `UnitySDK/Packages/com.happs.sdk`
 
-Upgrading an existing WebGL integration from SDK 2.0.6: see [WebGL Migration: 2.0.6 to 3.1.0](UnitySDK/Packages/com.happs.sdk/MIGRATION_WEB_2.0.6_TO_3.1.0.md).
+Upgrading an existing WebGL integration from SDK 2.0.6: see [WebGL Migration: 2.0.6 to 3.1.1](UnitySDK/Packages/com.happs.sdk/MIGRATION_WEB_2.0.6_TO_3.1.1.md).
 
 For native Android integration, follow [Mobile Integration](UnitySDK/Packages/com.happs.sdk/MOBILE_INTEGRATION.md).
 
@@ -63,7 +63,7 @@ Method semantics:
 - `HApps.Web.OpenIdpAuthPopup(url)` opens standalone backend auth popup and returns `AuthPopupData` for either ticket-based or cookie-based session auth.
 - `HApps.Web.OpenPortalAuthPopup()` opens portal-managed auth UI and returns `true` when portal auth completes successfully. If the connected profile is already verified, it returns `true` locally without opening a popup or emitting a new `AuthCompleted` event.
 - `HApps.Web.OpenAgeVerification(adultMode)` opens portal-managed age verification UI from the game.
-- `HApps.Web.SetTheaterMode(enabled)` is retained in the public API, but deployed JS SDK 1.0.3 does not dispatch its `set_theater_mode` event. Do not depend on this call until the browser contract is updated.
+- `HApps.Web.SetTheaterMode(enabled)` sends the theater-mode request through JS SDK 1.1.0.
 - `HApps.Web.AuthCompleted` fires when the external page script sends `auth_complete`, even if you are not awaiting `OpenPortalAuthPopup()`.
 - `HApps.Web.IsPortalSite()` reflects `window.HApps.isPortal()` from the JS environment.
 - `HApps.Web.IsReady()` reflects `window.HApps.isReady()` from the JS environment.
@@ -128,7 +128,7 @@ switch (authPopupData.Flow)
 ### Standalone WebGL Template Example
 
 ```html
-<script src="https://hooli.games/public/js/sdk/1.0.3/hooligapps.debug.js"></script>
+<script src="https://cdn.hooli.games/sdk/1.1.0/hooligapps.js"></script>
 ```
 
 ```javascript
@@ -140,15 +140,19 @@ function initHApps(unityInstance) {
         return;
     }
 
-    const result = HApps.init({
+    const { ready } = HApps.init({
         platformOrigin: PLATFORM_ORIGIN,
         isPortal: false,
-        unityObjectName: "HAppsJSBridge",
-        unityMethodName: "OnMessage",
-        gameInstance: unityInstance
+        debug: false
     });
 
-    result.ready.then(function(data) {
+    HApps.unity.attach({
+        gameInstance: unityInstance,
+        objectName: "HAppsJSBridge",
+        methodName: "OnMessage"
+    });
+
+    ready.then(function(data) {
         console.log("HApps ready, user:", data.user);
     }).catch(function(err) {
         console.error("HApps login failed:", err);
@@ -160,13 +164,13 @@ createUnityInstance(canvas, config, onProgress).then((unityInstance) => {
 });
 ```
 
-Required bridge config for Unity:
+Required configuration:
 
 - `isPortal: false`
-- `unityObjectName: "HAppsJSBridge"`
-- `unityMethodName: "OnMessage"`
+- `objectName: "HAppsJSBridge"`
+- `methodName: "OnMessage"`
 
-In standalone mode, `result.ready` resolves immediately with `user: null`. User authentication is performed later through `HApps.Web.OpenIdpAuthPopup(url)`.
+In standalone mode, `ready` resolves immediately with `user: null`. User authentication is performed later through `HApps.Web.OpenIdpAuthPopup(url)`.
 
 ### Backend Requirements
 
@@ -190,16 +194,10 @@ This flow requires platform JS bootstrap and Unity-side connection.
 
 ### WebGL Template Setup
 
-Load one of the HApps browser SDK scripts in the page and initialize it with `HApps.init(...)`.
-
-Choose one script variant:
+Load JS SDK 1.1.0, initialize the core client, and attach the Unity bridge.
 
 ```html
-<!-- Development -->
-<script src="https://hooli.games/public/js/sdk/1.0.3/hooligapps.debug.js"></script>
-
-<!-- Production -->
-<!-- <script src="https://hooli.games/public/js/sdk/1.0.3/hooligapps.js"></script> -->
+<script src="https://cdn.hooli.games/sdk/1.1.0/hooligapps.js"></script>
 ```
 
 ### Portal WebGL Template Example
@@ -207,7 +205,7 @@ Choose one script variant:
 Example portal page setup:
 
 ```html
-<script src="https://hooli.games/public/js/sdk/1.0.3/hooligapps.debug.js"></script>
+<script src="https://cdn.hooli.games/sdk/1.1.0/hooligapps.js"></script>
 ```
 
 ```javascript
@@ -220,14 +218,20 @@ function initHApps(unityInstance) {
         return;
     }
 
-    HApps.init({
+    const { ready } = HApps.init({
         platformOrigin: PLATFORM_ORIGIN,
         ssoLoginUrl: BACKEND_HOST + "/sign",
         isPortal: true,
-        unityObjectName: "HAppsJSBridge",
-        unityMethodName: "OnMessage",
-        gameInstance: unityInstance
+        debug: false
     });
+
+    HApps.unity.attach({
+        gameInstance: unityInstance,
+        objectName: "HAppsJSBridge",
+        methodName: "OnMessage"
+    });
+
+    ready.catch(console.error);
 }
 
 createUnityInstance(canvas, config, onProgress).then((unityInstance) => {
@@ -235,18 +239,15 @@ createUnityInstance(canvas, config, onProgress).then((unityInstance) => {
 });
 ```
 
-Required bridge config for Unity:
+Required configuration:
 
 - `isPortal: true`
-- `unityObjectName: "HAppsJSBridge"`
-- `unityMethodName: "OnMessage"`
+- `objectName: "HAppsJSBridge"`
+- `methodName: "OnMessage"`
 
 Common `HApps.init(...)` config:
 
 - `platformOrigin`
-- `gameInstance`
-- `unityObjectName: "HAppsJSBridge"`
-- `unityMethodName: "OnMessage"`
 
 Mode-specific config:
 
@@ -257,10 +258,10 @@ Optional config:
 
 - `maxRetries`
 - `retryDelayMs`
+- `operationTimeoutMs`
+- `debug`
 
-`debug` is not an `HApps.init(...)` option in JS SDK 1.0.3. Select `hooligapps.debug.js` when browser-side debug output is needed.
-
-Do not use the embedded `result.ready` promise as the Unity readiness gate with deployed JS SDK 1.0.3: its initial successful portal login does not resolve that promise. Use `await HApps.Web.Connect()` in Unity. This limitation does not apply to standalone mode, where `ready` resolves immediately.
+`debug: true` enables browser-side JS SDK logging. `HApps.SetDebugLogging(true)` controls Unity-side SDK logging separately.
 
 ### Recommended Unity Flow
 
@@ -449,9 +450,9 @@ Backend must:
 
 1. Validate launch token with the platform.
 2. Create or load the user.
-3. Return the signature expected by JS SDK 1.0.3. User data comes from the platform launch message, not this response.
+3. Return the signature expected by JS SDK 1.1.0. User data comes from the platform launch message, not this response.
 
-JS SDK 1.0.3 sends this request body:
+JS SDK 1.1.0 sends this request body:
 
 ```json
 {
@@ -473,8 +474,7 @@ Expected response shape:
 - `MakePayment()` accepts `orderId`, not `PaymentItem`.
 - `Connect()` and `GetProfile()` may fail if the JS bridge is not correctly wired in the WebGL template.
 - `HApps.init(...)` in the page template and `HApps.Web.Connect()` in Unity are different steps. The first bootstraps the browser bridge, the second waits for the Unity-side bridge connection flow.
-- the embedded `HApps.init(...).ready` promise does not resolve after the initial successful portal login in deployed JS SDK 1.0.3; use Unity `Connect()` as the readiness gate
-- `SetTheaterMode()` is present in the Unity API, but JS SDK 1.0.3 does not dispatch `set_theater_mode`; the call has no effect with the supported browser contract.
+- attach the Unity bridge with `HApps.unity.attach(...)` before Unity calls `HApps.Web.Connect()`
 
 ## Security Requirements
 
@@ -488,4 +488,4 @@ Expected response shape:
 
 ## Version
 
-HApps Unity SDK - Integration Guide v3.1.0 (JS SDK 1.0.3)
+HApps Unity SDK - Integration Guide v3.1.1 (JS SDK 1.1.0)
