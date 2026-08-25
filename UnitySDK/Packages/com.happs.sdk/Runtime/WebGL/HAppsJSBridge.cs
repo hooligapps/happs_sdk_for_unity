@@ -10,8 +10,11 @@ namespace HAppsSDK
         public event Action<UserData, HAppsErrorData> OnProfile;
         public event Action<PaymentData> OnPaymentCreated;
         public event Action<PaymentData> OnPaymentCompleted;
+        public event Action<PaymentData> OnPaymentStatus;
         public event Action<AuthPopupData> OnAuthPopupCompleted;
         public event Action<UserData, SignatureData> OnPortalAuthCompleted;
+        public event Action<UserData> OnUserChanged;
+        public event Action<HAppsErrorData> OnError;
 
         public void OnMessage(string json)
         {
@@ -59,12 +62,24 @@ namespace HAppsSDK
                     OnPaymentCompleted?.Invoke(msg.paymentData);
                     break;
 
+                case "payment_status":
+                    OnPaymentStatus?.Invoke(msg.paymentData);
+                    break;
+
                 case "popup_auth_result":
                     OnAuthPopupCompleted?.Invoke(msg.authPopupData);
                     break;
 
                 case "auth_complete":
                     OnPortalAuthCompleted?.Invoke(msg.userData, msg.signatureData);
+                    break;
+
+                case "user_changed":
+                    OnUserChanged?.Invoke(msg.userData);
+                    break;
+
+                case "error":
+                    OnError?.Invoke(msg.error);
                     break;
 
                 default:
@@ -102,10 +117,21 @@ namespace HAppsSDK
         {
             StartCoroutine(RunNextFrameRoutine(action));
         }
+
+        public void RunAfterDelay(float seconds, Action action)
+        {
+            StartCoroutine(RunAfterDelayRoutine(seconds, action));
+        }
         
         private System.Collections.IEnumerator RunNextFrameRoutine(Action action)
         {
             yield return null;
+            action?.Invoke();
+        }
+
+        private System.Collections.IEnumerator RunAfterDelayRoutine(float seconds, Action action)
+        {
+            yield return new WaitForSecondsRealtime(seconds);
             action?.Invoke();
         }
         

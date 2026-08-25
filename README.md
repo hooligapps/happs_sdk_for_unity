@@ -39,8 +39,11 @@ Task<PaymentData> HApps.Web.MakePayment(string orderId)
 Task<AuthPopupData> HApps.Web.OpenIdpAuthPopup(string url)
 Task<bool> HApps.Web.OpenPortalAuthPopup()
 void HApps.Web.OpenAgeVerification(bool adultMode = true)
+void HApps.Web.SetFullscreen(bool enabled)
 void HApps.Web.SetTheaterMode(bool enabled)
 event Action<UserData, SignatureData> HApps.Web.AuthCompleted
+event Action<UserData> HApps.Web.UserChanged
+event Action<HAppsErrorData> HApps.Web.Error
 bool HApps.Web.IsPortalSite()
 bool HApps.Web.IsReady()
 
@@ -63,8 +66,11 @@ Method semantics:
 - `HApps.Web.OpenIdpAuthPopup(url)` opens standalone backend auth popup and returns `AuthPopupData` for either ticket-based or cookie-based session auth.
 - `HApps.Web.OpenPortalAuthPopup()` opens portal-managed auth UI and returns `true` when portal auth completes successfully. If the connected profile is already verified, it returns `true` locally without opening a popup or emitting a new `AuthCompleted` event.
 - `HApps.Web.OpenAgeVerification(adultMode)` opens portal-managed age verification UI from the game.
+- `HApps.Web.SetFullscreen(enabled)` sends the fullscreen request through JS SDK 1.1.0.
 - `HApps.Web.SetTheaterMode(enabled)` sends the theater-mode request through JS SDK 1.1.0.
 - `HApps.Web.AuthCompleted` fires when the external page script sends `auth_complete`, even if you are not awaiting `OpenPortalAuthPopup()`.
+- `HApps.Web.UserChanged` fires on JS SDK `user_changed` and updates `HApps.Web.CurrentUser` first.
+- `HApps.Web.Error` exposes errors reported by the JS SDK. These errors are not correlated with a specific pending operation.
 - `HApps.Web.IsPortalSite()` reflects `window.HApps.isPortal()` from the JS environment.
 - `HApps.Web.IsReady()` reflects `window.HApps.isReady()` from the JS environment.
 - Debug logging is disabled by default. `HApps.SetDebugLogging(enabled)` toggles sanitized debug and warning logs; errors always log.
@@ -431,6 +437,8 @@ Important points:
 - `orderId` must already be created by your backend/business layer.
 - `MakePayment()` does not build an order for you.
 - if `MakePayment()` is called again while the previous payment is still active, the second call throws `InvalidOperationException`; the first payment remains active
+- checkout completion is confirmed through `payment_status`; `pending` responses are polled up to 10 times at one-second intervals
+- `MakePayment()` can return `PaymentStatus.Pending` if portal postback validation is still pending after all polling attempts; do not grant rewards in this state
 - client-side payment success is not enough to grant rewards
 - backend verification is mandatory
 

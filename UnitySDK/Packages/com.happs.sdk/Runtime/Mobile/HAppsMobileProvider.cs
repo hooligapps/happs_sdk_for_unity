@@ -531,7 +531,7 @@ namespace HAppsSDK
 			var payload = new CreatePaymentPayload
 			{
 				productId = request.ProductId,
-				price = request.Price.ToString(System.Globalization.CultureInfo.InvariantCulture),
+				price = decimal.ToDouble(request.Price),
 				currency = request.Currency,
 				desc = request.Description,
 				requestId = request.RequestId
@@ -1526,7 +1526,7 @@ namespace HAppsSDK
 		private sealed class CreatePaymentPayload
 		{
 			public string productId;
-			public string price;
+			public double price;
 			public string currency;
 			public string desc;
 			public string requestId;

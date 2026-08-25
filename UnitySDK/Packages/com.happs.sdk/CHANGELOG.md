@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Confirm WebGL checkout results through `payment_status` instead of treating `payment_complete` as final
+- Poll `payment_status` up to 10 times while portal postback validation is pending
+- Add `PaymentStatus.Pending` for payments that remain unvalidated after polling
+- Handle JS SDK `user_changed` and `error` events in the WebGL provider
+- Add `HApps.Web.SetFullscreen(bool)`
+- Send mobile payment `price` as a JSON number
+
 ## 3.1.1
 
 - Update the WebGL bridge and integration documentation for HApps JS SDK 1.1.0

@@ -23,6 +23,7 @@ namespace HAppsSDK
 			=> throw new NotSupportedException("OpenPortalAuthPopup is not supported by this provider.");
 
 		public virtual void OpenAgeVerification(bool adultMode = true) { }
+		public virtual void SetFullscreen(bool enabled) { }
 		public virtual void SetTheaterMode(bool enabled) { }
 		public virtual bool IsPortalSite() => false;
 

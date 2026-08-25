@@ -29,8 +29,11 @@ Task<PaymentData> HApps.Web.MakePayment(string orderId)
 Task<AuthPopupData> HApps.Web.OpenIdpAuthPopup(string url)
 Task<bool> HApps.Web.OpenPortalAuthPopup()
 void HApps.Web.OpenAgeVerification(bool adultMode = true)
+void HApps.Web.SetFullscreen(bool enabled)
 void HApps.Web.SetTheaterMode(bool enabled)
 event Action<UserData, SignatureData> HApps.Web.AuthCompleted
+event Action<UserData> HApps.Web.UserChanged
+event Action<HAppsErrorData> HApps.Web.Error
 bool HApps.Web.IsPortalSite()
 bool HApps.Web.IsReady()
 
@@ -78,11 +81,14 @@ Embedded portal flow:
 - send `HApps.Web.Signature` to your backend if you need server-side user resolution
 - call `HApps.Web.OpenPortalAuthPopup()` when the game must show portal login UI
 - call `HApps.Web.OpenAgeVerification()` when the game must show portal age verification UI
+- call `HApps.Web.SetFullscreen(enabled)` to switch the portal fullscreen layout
 - subscribe to `HApps.Web.AuthCompleted` if auth can complete outside the awaited popup flow
+- subscribe to `HApps.Web.UserChanged` for profile changes and `HApps.Web.Error` for browser SDK errors
 
 If the connected profile is already verified, `OpenPortalAuthPopup()` returns `true` locally without opening a popup or emitting a new `AuthCompleted` event.
 
 `SetTheaterMode(bool)` is dispatched by JS SDK 1.1.0.
+`SetFullscreen(bool)` is dispatched by JS SDK 1.1.0.
 
 Example subscription:
 
@@ -111,10 +117,14 @@ private void HandleAuthCompleted(UserData user, SignatureData signature)
 - `AuthPopupData` supports both ticket-based and cookie-based session auth
 - `Connect()` and `OpenPortalAuthPopup()` are separate steps
 - `OpenAgeVerification()` is a fire-and-forget bridge call with no completion callback
+- `UserChanged` updates `CurrentUser` before invoking subscribers
+- `Error` is not correlated with a specific pending operation
 - `HApps.init(...)` and `HApps.unity.attach(...)` are separate browser-side setup steps
 - debug logging is disabled by default; `SetDebugLogging(true)` enables sanitized debug/warn logs, while errors always log
 - SDK logs never include tokens, authorization codes, signatures, deep-link query strings, or auth request/response bodies
 - `MakePayment()` accepts a backend-created `orderId`
 - a second `MakePayment()` call throws `InvalidOperationException` while the first payment is still active; it does not replace the first operation
+- checkout completion is confirmed through `payment_status`; `pending` responses are polled up to 10 times at one-second intervals
+- `MakePayment()` can return `PaymentStatus.Pending` if portal postback validation is still pending after all polling attempts; do not grant the product in this state
 - mobile `GetProfile()` and mobile `MakePayment(orderId)` are not part of the current native flow
 - sample scene/scripts remain in the host project, not in the package
