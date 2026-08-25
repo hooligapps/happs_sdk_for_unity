@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 3.1.2-preview.1
 
 - Confirm WebGL checkout results through `payment_status` instead of treating `payment_complete` as final
 - Poll `payment_status` up to 10 times while portal postback validation is pending
