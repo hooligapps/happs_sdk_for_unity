@@ -8,7 +8,7 @@ namespace HAppsSDK
 {
     public sealed class HAppsWebProvider : HAppsProvider
     {
-        public const string Version = "3.1.2-preview.2";
+        public const string Version = "3.1.2-preview.3";
 
         public event Action<UserData, SignatureData> AuthCompleted;
         public event Action<UserData> UserChanged;
@@ -27,14 +27,9 @@ namespace HAppsSDK
 
         private const int DEFAULT_TIMEOUT_MS = 30000;
         private const int INTERACTIVE_TIMEOUT_MS = 180000;
-        private const int PAYMENT_STATUS_MAX_REQUESTS = 10;
-        private const float PAYMENT_STATUS_POLL_INTERVAL_SECONDS = 1f;
 
         private readonly HAppsJSBridge _bridge;
         private bool _disposed;
-        private string _activePaymentOrderId;
-        private int _paymentStatusRequestsSent;
-        private int _paymentPollingGeneration;
 
         private readonly Dictionary<OperationType, OperationBase> _operations
             = new();
@@ -51,7 +46,6 @@ namespace HAppsSDK
             _bridge.OnProfile += HandleProfile;
             _bridge.OnPaymentCreated += HandlePaymentCreated;
             _bridge.OnPaymentCompleted += HandlePaymentCompleted;
-            _bridge.OnPaymentStatus += HandlePaymentStatus;
             _bridge.OnAuthPopupCompleted += HandleAuthPopupCompleted;
             _bridge.OnPortalAuthCompleted += HandlePortalAuthCompleted;
             _bridge.OnUserChanged += HandleUserChanged;
@@ -84,11 +78,7 @@ namespace HAppsSDK
 
             return StartOperation<PaymentData>(
                 OperationType.MakePayment,
-                () =>
-                {
-                    ResetPaymentPolling(orderId);
-                    _bridge.SendMessage("open_payment", json);
-                },
+                () => _bridge.SendMessage("open_payment", json),
                 false,
                 INTERACTIVE_TIMEOUT_MS);
         }
@@ -171,7 +161,6 @@ namespace HAppsSDK
                 return;
 
             _disposed = true;
-            CancelPaymentPolling();
             HAppsLog.Log("Provider dispose");
 
             if (_bridge != null)
@@ -180,7 +169,6 @@ namespace HAppsSDK
                 _bridge.OnProfile -= HandleProfile;
                 _bridge.OnPaymentCreated -= HandlePaymentCreated;
                 _bridge.OnPaymentCompleted -= HandlePaymentCompleted;
-                _bridge.OnPaymentStatus -= HandlePaymentStatus;
                 _bridge.OnAuthPopupCompleted -= HandleAuthPopupCompleted;
                 _bridge.OnPortalAuthCompleted -= HandlePortalAuthCompleted;
                 _bridge.OnUserChanged -= HandleUserChanged;
@@ -314,158 +302,18 @@ namespace HAppsSDK
         {
             if (data == null)
             {
-                FailPayment(new InvalidOperationException("Payment response is empty."));
+                Fail(OperationType.MakePayment, new InvalidOperationException("Payment response is empty."));
                 return;
             }
 
-            if (!string.IsNullOrEmpty(data.orderId))
-                _activePaymentOrderId = data.orderId;
-
-            // Older browser bridges report payment/status responses as "payment".
-            if (_paymentStatusRequestsSent > 0)
-            {
-                HandlePaymentStatusResponse(data);
-                return;
-            }
-
-            if (data.Status == PaymentStatus.Started)
-                return;
-
-            if (data.Status == PaymentStatus.Pending)
-            {
-                BeginPaymentStatusPolling(data);
-                return;
-            }
-
-            CompletePayment(data);
+            if (data.Status != PaymentStatus.Started)
+                Complete(OperationType.MakePayment, data);
         }
 
         private void HandlePaymentCompleted(PaymentData data)
         {
             HAppsJSBridge.TryFocusWindow();
-
-            if (data == null)
-            {
-                FailPayment(new InvalidOperationException("Payment completion response is empty."));
-                return;
-            }
-
-            // Some bridge versions reuse "payment_complete" for status responses.
-            if (_paymentStatusRequestsSent > 0)
-            {
-                HandlePaymentStatusResponse(data);
-                return;
-            }
-
-            if (data.IsFailed)
-            {
-                CompletePayment(data);
-                return;
-            }
-
-            // Checkout completion only means that the provider accepted the payment.
-            // Ask the portal for the postback-validated status before reporting success.
-            BeginPaymentStatusPolling(data);
-        }
-
-        private void HandlePaymentStatus(PaymentData data)
-        {
-            HandlePaymentStatusResponse(data);
-        }
-
-        private void BeginPaymentStatusPolling(PaymentData data)
-        {
-            if (!string.IsNullOrEmpty(data?.orderId))
-                _activePaymentOrderId = data.orderId;
-
-            if (string.IsNullOrEmpty(_activePaymentOrderId))
-            {
-                FailPayment(new InvalidOperationException("Payment status cannot be requested without an orderId."));
-                return;
-            }
-
-            _paymentStatusRequestsSent = 0;
-            _paymentPollingGeneration++;
-            RequestPaymentStatus(data);
-        }
-
-        private void HandlePaymentStatusResponse(PaymentData data)
-        {
-            if (data == null)
-            {
-                FailPayment(new InvalidOperationException("Payment status response is empty."));
-                return;
-            }
-
-            if (!string.IsNullOrEmpty(data.orderId))
-                _activePaymentOrderId = data.orderId;
-
-            if (data.Status != PaymentStatus.Pending && data.Status != PaymentStatus.Started)
-            {
-                CompletePayment(data);
-                return;
-            }
-
-            if (_paymentStatusRequestsSent >= PAYMENT_STATUS_MAX_REQUESTS)
-            {
-                HAppsLog.Warn("Payment is still pending after status polling completed");
-                CompletePayment(data);
-                return;
-            }
-
-            var generation = _paymentPollingGeneration;
-            _bridge.RunAfterDelay(PAYMENT_STATUS_POLL_INTERVAL_SECONDS, () =>
-            {
-                if (_disposed || generation != _paymentPollingGeneration)
-                    return;
-
-                RequestPaymentStatus(data);
-            });
-        }
-
-        private void RequestPaymentStatus(PaymentData lastKnownStatus)
-        {
-            if (!_operations.ContainsKey(OperationType.MakePayment))
-                return;
-
-            if (_paymentStatusRequestsSent >= PAYMENT_STATUS_MAX_REQUESTS)
-            {
-                CompletePayment(lastKnownStatus);
-                return;
-            }
-
-            _paymentStatusRequestsSent++;
-            var json = JsonUtility.ToJson(new PaymentConfirmRequest
-            {
-                orderId = _activePaymentOrderId
-            });
-            _bridge.SendMessage("payment_status", json);
-        }
-
-        private void CompletePayment(PaymentData data)
-        {
-            CancelPaymentPolling();
             Complete(OperationType.MakePayment, data);
-        }
-
-        private void FailPayment(Exception error)
-        {
-            CancelPaymentPolling();
-            Fail(OperationType.MakePayment, error);
-        }
-
-        private void ResetPaymentPolling(string orderId)
-        {
-            _paymentPollingGeneration++;
-            _paymentStatusRequestsSent = 0;
-            _activePaymentOrderId = orderId;
-        }
-
-        private void CancelPaymentPolling()
-        {
-            _paymentPollingGeneration++;
-            _paymentStatusRequestsSent = 0;
-            _activePaymentOrderId = null;
         }
 
         private void HandleAuthPopupCompleted(AuthPopupData authPopupData)

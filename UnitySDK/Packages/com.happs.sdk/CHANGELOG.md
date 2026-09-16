@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.1.2-preview.3
+
+- Remove Unity-side WebGL payment-status polling and `PaymentStatus.Pending`
+- Keep payment fulfillment and postback validation in the game backend
+
 ## 3.1.2-preview.2
 
 - Add `HApps.Web.OpenExternalUrl(string)` for requesting external URL navigation from the portal

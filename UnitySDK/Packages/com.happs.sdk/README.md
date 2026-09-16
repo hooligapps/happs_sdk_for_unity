@@ -1,6 +1,6 @@
 # HApps Unity SDK
 
-Unity SDK 3.1.2-preview.2 for HApps WebGL integrations through JS SDK 1.1.0 and native Android integrations.
+Unity SDK 3.1.2-preview.3 for HApps WebGL integrations through JS SDK 1.1.0 and native Android integrations.
 
 ## Installation
 
@@ -9,12 +9,12 @@ Add the package to your Unity project through `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.1.2-preview.2"
+    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.1.2-preview.3"
   }
 }
 ```
 
-Use a release tag such as `v3.1.2-preview.2`. During development you can temporarily point to a commit hash instead of a tag.
+Use a release tag such as `v3.1.2-preview.3`. During development you can temporarily point to a commit hash instead of a tag.
 
 For an existing WebGL project, follow [WebGL Migration: SDK 2.0.6 to 3.1.1](MIGRATION_WEB_2.0.6_TO_3.1.1.md).
 
@@ -55,7 +55,7 @@ void HApps.Shutdown()
 Your WebGL page must:
 
 - load `https://cdn.hooli.games/sdk/1.1.0/hooligapps.js`
-- use the JS SDK `1.1.0` contract; unversioned builds are not supported by Unity SDK `3.1.2-preview.2`
+- use the JS SDK `1.1.0` contract; unversioned builds are not supported by Unity SDK `3.1.2-preview.3`
 - initialize the core client with `HApps.init(...)`
 - attach Unity with `HApps.unity.attach(...)`
 - use `objectName: "HAppsJSBridge"`
@@ -126,7 +126,6 @@ private void HandleAuthCompleted(UserData user, SignatureData signature)
 - SDK logs never include tokens, authorization codes, signatures, deep-link query strings, or auth request/response bodies
 - `MakePayment()` accepts a backend-created `orderId`
 - a second `MakePayment()` call throws `InvalidOperationException` while the first payment is still active; it does not replace the first operation
-- checkout completion is confirmed through `payment_status`; `pending` responses are polled up to 10 times at one-second intervals
-- `MakePayment()` can return `PaymentStatus.Pending` if portal postback validation is still pending after all polling attempts; do not grant the product in this state
+- payment fulfillment must be checked through the game backend; the Unity SDK does not validate postbacks or poll payment delivery
 - mobile `GetProfile()` and mobile `MakePayment(orderId)` are not part of the current native flow
 - sample scene/scripts remain in the host project, not in the package

@@ -10,7 +10,6 @@ namespace HAppsSDK
         public event Action<UserData, HAppsErrorData> OnProfile;
         public event Action<PaymentData> OnPaymentCreated;
         public event Action<PaymentData> OnPaymentCompleted;
-        public event Action<PaymentData> OnPaymentStatus;
         public event Action<AuthPopupData> OnAuthPopupCompleted;
         public event Action<UserData, SignatureData> OnPortalAuthCompleted;
         public event Action<UserData> OnUserChanged;
@@ -60,10 +59,6 @@ namespace HAppsSDK
 
                 case "payment_complete":
                     OnPaymentCompleted?.Invoke(msg.paymentData);
-                    break;
-
-                case "payment_status":
-                    OnPaymentStatus?.Invoke(msg.paymentData);
                     break;
 
                 case "popup_auth_result":
@@ -118,23 +113,12 @@ namespace HAppsSDK
             StartCoroutine(RunNextFrameRoutine(action));
         }
 
-        public void RunAfterDelay(float seconds, Action action)
-        {
-            StartCoroutine(RunAfterDelayRoutine(seconds, action));
-        }
-        
         private System.Collections.IEnumerator RunNextFrameRoutine(Action action)
         {
             yield return null;
             action?.Invoke();
         }
 
-        private System.Collections.IEnumerator RunAfterDelayRoutine(float seconds, Action action)
-        {
-            yield return new WaitForSecondsRealtime(seconds);
-            action?.Invoke();
-        }
-        
         public static bool IsPortalSite()
         {
 #if UNITY_WEBGL && !UNITY_EDITOR

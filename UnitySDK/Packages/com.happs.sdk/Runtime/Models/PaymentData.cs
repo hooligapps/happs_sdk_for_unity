@@ -6,7 +6,6 @@ namespace HAppsSDK
 	{
 		Unknown,
 		Started,
-		Pending,
 		Succeeded,
 		Fail,
 		Cancelled,
@@ -32,7 +31,6 @@ namespace HAppsSDK
 				return status.ToLowerInvariant() switch
 				{
 					"started" => PaymentStatus.Started,
-					"pending" => PaymentStatus.Pending,
 					"succeeded" => PaymentStatus.Succeeded,
 					"fail" => PaymentStatus.Fail,
 					"cancelled" => PaymentStatus.Cancelled,
@@ -43,7 +41,6 @@ namespace HAppsSDK
 		}
 
 		public bool IsSuccess => Status == PaymentStatus.Succeeded;
-		public bool IsPending => Status == PaymentStatus.Pending;
 
 		public bool IsFailed =>
 			Status == PaymentStatus.Fail ||

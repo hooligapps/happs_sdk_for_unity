@@ -1,6 +1,6 @@
 # HApps Unity SDK
 
-Unity SDK 3.1.2-preview.2 for HApps WebGL integrations through JS SDK 1.1.0 and native Android integrations.
+Unity SDK 3.1.2-preview.3 for HApps WebGL integrations through JS SDK 1.1.0 and native Android integrations.
 
 ## Installation
 
@@ -9,7 +9,7 @@ Add the package to your Unity project through `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.1.2-preview.2"
+    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.1.2-preview.3"
   }
 }
 ```
@@ -439,9 +439,8 @@ Important points:
 - `orderId` must already be created by your backend/business layer.
 - `MakePayment()` does not build an order for you.
 - if `MakePayment()` is called again while the previous payment is still active, the second call throws `InvalidOperationException`; the first payment remains active
-- checkout completion is confirmed through `payment_status`; `pending` responses are polled up to 10 times at one-second intervals
-- `MakePayment()` can return `PaymentStatus.Pending` if portal postback validation is still pending after all polling attempts; do not grant rewards in this state
 - client-side payment success is not enough to grant rewards
+- if the client must wait for fulfillment, poll the game backend's payment-status endpoint; the Unity SDK does not validate postbacks or poll payment delivery
 - backend verification is mandatory
 
 Payment lifecycle:
@@ -498,4 +497,4 @@ Expected response shape:
 
 ## Version
 
-HApps Unity SDK - Integration Guide v3.1.2-preview.2 (JS SDK 1.1.0)
+HApps Unity SDK - Integration Guide v3.1.2-preview.3 (JS SDK 1.1.0)
