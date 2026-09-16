@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.1.2-preview.2
+
+- Add `HApps.Web.OpenExternalUrl(string)` for requesting external URL navigation from the portal
+
 ## 3.1.2-preview.1
 
 - Confirm WebGL checkout results through `payment_status` instead of treating `payment_complete` as final

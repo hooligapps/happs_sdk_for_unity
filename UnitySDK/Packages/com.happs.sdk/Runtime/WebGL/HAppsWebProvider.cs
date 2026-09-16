@@ -8,7 +8,7 @@ namespace HAppsSDK
 {
     public sealed class HAppsWebProvider : HAppsProvider
     {
-        public const string Version = "3.1.2-preview.1";
+        public const string Version = "3.1.2-preview.2";
 
         public event Action<UserData, SignatureData> AuthCompleted;
         public event Action<UserData> UserChanged;
@@ -147,6 +147,22 @@ namespace HAppsSDK
             });
 
             _bridge.SendMessage("set_fullscreen", json);
+        }
+
+        public void OpenExternalUrl(string url)
+        {
+            if (_disposed)
+                throw new ObjectDisposedException(nameof(HAppsWebProvider));
+
+            if (string.IsNullOrWhiteSpace(url))
+                throw new ArgumentException("URL cannot be null or empty.", nameof(url));
+
+            var json = JsonUtility.ToJson(new OpenExternalUrlRequest
+            {
+                url = url.Trim()
+            });
+
+            _bridge.SendMessage("open_external_url", json);
         }
 
         public override void Dispose()

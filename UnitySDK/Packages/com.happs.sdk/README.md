@@ -1,6 +1,6 @@
 # HApps Unity SDK
 
-Unity SDK 3.1.2-preview.1 for HApps WebGL integrations through JS SDK 1.1.0 and native Android integrations.
+Unity SDK 3.1.2-preview.2 for HApps WebGL integrations through JS SDK 1.1.0 and native Android integrations.
 
 ## Installation
 
@@ -9,12 +9,12 @@ Add the package to your Unity project through `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.1.2-preview.1"
+    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.1.2-preview.2"
   }
 }
 ```
 
-Use a release tag such as `v3.1.2-preview.1`. During development you can temporarily point to a commit hash instead of a tag.
+Use a release tag such as `v3.1.2-preview.2`. During development you can temporarily point to a commit hash instead of a tag.
 
 For an existing WebGL project, follow [WebGL Migration: SDK 2.0.6 to 3.1.1](MIGRATION_WEB_2.0.6_TO_3.1.1.md).
 
@@ -31,6 +31,7 @@ Task<bool> HApps.Web.OpenPortalAuthPopup()
 void HApps.Web.OpenAgeVerification(bool adultMode = true)
 void HApps.Web.SetFullscreen(bool enabled)
 void HApps.Web.SetTheaterMode(bool enabled)
+void HApps.Web.OpenExternalUrl(string url)
 event Action<UserData, SignatureData> HApps.Web.AuthCompleted
 event Action<UserData> HApps.Web.UserChanged
 event Action<HAppsErrorData> HApps.Web.Error
@@ -54,7 +55,7 @@ void HApps.Shutdown()
 Your WebGL page must:
 
 - load `https://cdn.hooli.games/sdk/1.1.0/hooligapps.js`
-- use the JS SDK `1.1.0` contract; unversioned builds are not supported by Unity SDK `3.1.2-preview.1`
+- use the JS SDK `1.1.0` contract; unversioned builds are not supported by Unity SDK `3.1.2-preview.2`
 - initialize the core client with `HApps.init(...)`
 - attach Unity with `HApps.unity.attach(...)`
 - use `objectName: "HAppsJSBridge"`
@@ -82,6 +83,7 @@ Embedded portal flow:
 - call `HApps.Web.OpenPortalAuthPopup()` when the game must show portal login UI
 - call `HApps.Web.OpenAgeVerification()` when the game must show portal age verification UI
 - call `HApps.Web.SetFullscreen(enabled)` to switch the portal fullscreen layout
+- call `HApps.Web.OpenExternalUrl(url)` to ask the portal to open an external URL
 - subscribe to `HApps.Web.AuthCompleted` if auth can complete outside the awaited popup flow
 - subscribe to `HApps.Web.UserChanged` for profile changes and `HApps.Web.Error` for browser SDK errors
 

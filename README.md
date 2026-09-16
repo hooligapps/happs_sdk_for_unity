@@ -1,6 +1,6 @@
 # HApps Unity SDK
 
-Unity SDK 3.1.2-preview.1 for HApps WebGL integrations through JS SDK 1.1.0 and native Android integrations.
+Unity SDK 3.1.2-preview.2 for HApps WebGL integrations through JS SDK 1.1.0 and native Android integrations.
 
 ## Installation
 
@@ -9,7 +9,7 @@ Add the package to your Unity project through `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.1.2-preview.1"
+    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.1.2-preview.2"
   }
 }
 ```
@@ -41,6 +41,7 @@ Task<bool> HApps.Web.OpenPortalAuthPopup()
 void HApps.Web.OpenAgeVerification(bool adultMode = true)
 void HApps.Web.SetFullscreen(bool enabled)
 void HApps.Web.SetTheaterMode(bool enabled)
+void HApps.Web.OpenExternalUrl(string url)
 event Action<UserData, SignatureData> HApps.Web.AuthCompleted
 event Action<UserData> HApps.Web.UserChanged
 event Action<HAppsErrorData> HApps.Web.Error
@@ -68,6 +69,7 @@ Method semantics:
 - `HApps.Web.OpenAgeVerification(adultMode)` opens portal-managed age verification UI from the game.
 - `HApps.Web.SetFullscreen(enabled)` sends the fullscreen request through JS SDK 1.1.0.
 - `HApps.Web.SetTheaterMode(enabled)` sends the theater-mode request through JS SDK 1.1.0.
+- `HApps.Web.OpenExternalUrl(url)` asks JS SDK 1.1.0 and the portal to open the URL externally.
 - `HApps.Web.AuthCompleted` fires when the external page script sends `auth_complete`, even if you are not awaiting `OpenPortalAuthPopup()`.
 - `HApps.Web.UserChanged` fires on JS SDK `user_changed` and updates `HApps.Web.CurrentUser` first.
 - `HApps.Web.Error` exposes errors reported by the JS SDK. These errors are not correlated with a specific pending operation.
@@ -496,4 +498,4 @@ Expected response shape:
 
 ## Version
 
-HApps Unity SDK - Integration Guide v3.1.2-preview.1 (JS SDK 1.1.0)
+HApps Unity SDK - Integration Guide v3.1.2-preview.2 (JS SDK 1.1.0)
