@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.1.2
+
+- Handle JS SDK `user_changed` and `error` events in the WebGL provider
+- Add `HApps.Web.SetFullscreen(bool)`
+- Add `HApps.Web.OpenExternalUrl(string)` for requesting external URL navigation from the portal
+- Send mobile payment `price` as a JSON number
+- Keep payment fulfillment and postback validation in the game backend
+
 ## 3.1.2-preview.3
 
 - Remove Unity-side WebGL payment-status polling and `PaymentStatus.Pending`

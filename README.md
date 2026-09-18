@@ -1,6 +1,6 @@
 # HApps Unity SDK
 
-Unity SDK 3.1.2-preview.3 for HApps WebGL integrations through JS SDK 1.1.0 and native Android integrations.
+Unity SDK 3.1.2 for HApps WebGL integrations through JS SDK 1.1.0 and native Android integrations.
 
 ## Installation
 
@@ -9,7 +9,7 @@ Add the package to your Unity project through `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.1.2-preview.3"
+    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.1.2"
   }
 }
 ```
@@ -497,4 +497,4 @@ Expected response shape:
 
 ## Version
 
-HApps Unity SDK - Integration Guide v3.1.2-preview.3 (JS SDK 1.1.0)
+HApps Unity SDK - Integration Guide v3.1.2 (JS SDK 1.1.0)
