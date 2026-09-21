@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using HAppsSDK;
+using HAppsSDK.Attribution;
 using UnityEngine;
 
 public sealed class HAppsMobileSample : MonoBehaviour
@@ -74,6 +75,7 @@ public sealed class HAppsMobileSample : MonoBehaviour
                 return;
             }
 
+            HApps.SetDebugLogging(true);
             HApps.ConfigureMobile(new HAppsMobileAuthOptions
             {
                 PortalUrl = portalUrl,
@@ -85,6 +87,12 @@ public sealed class HAppsMobileSample : MonoBehaviour
             _isConfigured = true;
             LogStatus($"Configured locally: {clientId}");
 #if UNITY_ANDROID && !UNITY_EDITOR
+            HAppsAppsFlyer.Initialize(new HAppsAppsFlyerOptions
+            {
+                DebugLogging = true
+            });
+            HAppsAppsFlyer.StartTracking();
+            LogStatus("AppsFlyer tracking requested");
             StartInitSession();
 #else
             LogStatus("Mobile device flow is Android-only. Build and run on an Android device.");
@@ -172,7 +180,7 @@ public sealed class HAppsMobileSample : MonoBehaviour
             var session = await HApps.Mobile.InitSessionAsync();
             _isLoggedIn = session.IsAuthorized;
             _socialId = HApps.Mobile.CurrentUser?.userName ?? "-";
-            LogStatus($"initSession: deviceId={session.DeviceId}, publicId={session.PublicId}, verified={session.Verified}, isAuthorized={session.IsAuthorized}, accessTokenLength={session.AccessToken?.Length ?? 0}, expiresAt={session.AccessTokenExpiresAtUtc}");
+            LogStatus($"initSession: deviceId={session.DeviceId}, publicId={session.PublicId}, verified={session.Verified}, isAuthorized={session.IsAuthorized}, appsFlyerConfigured={!string.IsNullOrWhiteSpace(session.AppsFlyerKey)}, accessTokenLength={session.AccessToken?.Length ?? 0}, expiresAt={session.AccessTokenExpiresAtUtc}");
         }
         catch (Exception ex)
         {
@@ -197,7 +205,7 @@ public sealed class HAppsMobileSample : MonoBehaviour
             var session = await HApps.Mobile.RefreshSessionAsync();
             _isLoggedIn = session.IsAuthorized;
             _socialId = HApps.Mobile.CurrentUser?.userName ?? "-";
-            LogStatus($"re-init session: deviceId={session.DeviceId}, publicId={session.PublicId}, verified={session.Verified}, isAuthorized={session.IsAuthorized}, accessTokenLength={session.AccessToken?.Length ?? 0}, expiresAt={session.AccessTokenExpiresAtUtc}");
+            LogStatus($"re-init session: deviceId={session.DeviceId}, publicId={session.PublicId}, verified={session.Verified}, isAuthorized={session.IsAuthorized}, appsFlyerConfigured={!string.IsNullOrWhiteSpace(session.AppsFlyerKey)}, accessTokenLength={session.AccessToken?.Length ?? 0}, expiresAt={session.AccessTokenExpiresAtUtc}");
         }
         catch (Exception ex)
         {

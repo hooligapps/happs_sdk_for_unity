@@ -1,10 +1,25 @@
 {
   "dependencies": {
+    "com.google.external-dependency-manager": {
+      "version": "https://github.com/googlesamples/unity-jar-resolver.git?path=upm#v1.2.188",
+      "depth": 0,
+      "source": "git",
+      "dependencies": {},
+      "hash": "32c34224fd3f34c813c97c69508d2a3930105dc7"
+    },
     "com.happs.sdk": {
       "version": "file:com.happs.sdk",
       "depth": 0,
       "source": "embedded",
       "dependencies": {}
+    },
+    "com.happs.sdk.appsflyer": {
+      "version": "file:../../Integrations/com.happs.sdk.appsflyer",
+      "depth": 0,
+      "source": "local",
+      "dependencies": {
+        "com.happs.sdk": "3.2.0"
+      }
     },
     "com.unity.2d.animation": {
       "version": "13.0.4",

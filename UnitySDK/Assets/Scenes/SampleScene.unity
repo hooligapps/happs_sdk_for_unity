@@ -370,7 +370,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HAppsMobileSample
   portalUrl: https://portal.igra.rocks
-  clientId: lustage-mobile
+  clientId: lustage-android
   versionCode: 102
   productId: test-product
   price: 1.99

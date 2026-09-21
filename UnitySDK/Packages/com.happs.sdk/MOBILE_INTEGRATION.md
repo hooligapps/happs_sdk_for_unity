@@ -1,5 +1,7 @@
 # HApps Mobile Integration
 
+For optional AppsFlyer attribution in SDK 3.2.0, see [Attribution contract](ATTRIBUTION.md) and the [separate integration package](../../../Integrations/com.happs.sdk.appsflyer/README.md). Deploy backend support before enabling the adapter. The existing SDK 3.1.2 flow below does not require AppsFlyer.
+
 ## 1. Requirements and environments
 
 - HApps Unity SDK `3.1.2`.
@@ -142,6 +144,7 @@ bool signedIn = session.IsAuthorized;
 | `AccessToken` | short-lived HApps mobile token |
 | `AccessTokenExpiresAtUtc` | token expiry in Unix seconds |
 | `DeviceId` | installation ID, not a player ID |
+| `AppsFlyerKey` | SDK 3.2.0: optional server configuration for the AppsFlyer adapter; never log this value |
 
 Use `IsAuthorized`, not `Verified`, to determine login state. Load the profile and progress from the game backend using `PublicId`.
 
@@ -340,4 +343,4 @@ HApps.SetDebugLogging(true);
 HApps.SetDebugLogging(false);
 ```
 
-Errors are always logged. Never log or expose tokens, authorization codes, signatures, or complete callback URLs.
+Errors are always logged. Debug mode logs HTTP methods, URLs, sanitized request and response data, and status codes. Tokens, authorization codes, signatures, Dev Keys, sensitive redirect URLs, and URL query strings are replaced or omitted.

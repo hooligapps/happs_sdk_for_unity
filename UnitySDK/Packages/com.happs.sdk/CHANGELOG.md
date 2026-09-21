@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.2.0 (unreleased)
+
+- Add a dedicated Bearer-authenticated mobile attribution API with serialized submission and retries
+- Read optional AppsFlyer Dev Key configuration from the `session/init` response
+- Preserve the original `session/init` request and signature for all clients
+- Add an optional AppsFlyer adapter in `Integrations/com.happs.sdk.appsflyer`; core SDK has no AppsFlyer dependency
+- Document the required backend contract in `ATTRIBUTION.md`
+
 ## 3.1.2
 
 - Handle JS SDK `user_changed` and `error` events in the WebGL provider

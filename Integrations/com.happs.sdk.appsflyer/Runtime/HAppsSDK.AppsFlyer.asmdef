@@ -1,0 +1,7 @@
+{
+  "name": "HAppsSDK.AppsFlyer",
+  "rootNamespace": "HAppsSDK.Attribution",
+  "references": ["HAppsSDK", "AppsFlyer"],
+  "includePlatforms": ["Android", "Editor"],
+  "autoReferenced": true
+}

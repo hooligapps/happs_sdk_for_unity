@@ -1,5 +1,9 @@
 # HApps Unity SDK
 
+Development version: **3.2.0 (unreleased)**. The installation example below refers to the existing stable release.
+Optional mobile attribution is described in [ATTRIBUTION.md](ATTRIBUTION.md).
+The separate [AppsFlyer adapter](../../../Integrations/com.happs.sdk.appsflyer/README.md) is not a dependency of this package.
+
 Unity SDK 3.1.2 for HApps WebGL integrations through JS SDK 1.1.0 and native Android integrations.
 
 ## Installation
@@ -41,6 +45,9 @@ bool HApps.Web.IsReady()
 Task<MobileSession> HApps.Mobile.InitSessionAsync()
 Task<MobileLoginResult> HApps.Mobile.LoginAsync()
 Task<MobileSession> HApps.Mobile.RefreshSessionAsync()
+Task HApps.Mobile.SendAttributionAsync(MobileAttributionData attribution)
+void HApps.Mobile.SetAttribution(MobileAttributionData attribution)
+Task HApps.Mobile.FlushAttributionAsync()
 Task<MobileCreatePaymentResult> HApps.Mobile.CreatePaymentAsync(MobileCreatePaymentRequest request)
 Task<MobileCheckUpdateResult> HApps.Mobile.CheckForUpdateAsync(int versionCode)
 Task HApps.Mobile.LogoutAsync()
@@ -123,7 +130,8 @@ private void HandleAuthCompleted(UserData user, SignatureData signature)
 - `Error` is not correlated with a specific pending operation
 - `HApps.init(...)` and `HApps.unity.attach(...)` are separate browser-side setup steps
 - debug logging is disabled by default; `SetDebugLogging(true)` enables sanitized debug/warn logs, while errors always log
-- SDK logs never include tokens, authorization codes, signatures, deep-link query strings, or auth request/response bodies
+- debug logging includes HTTP methods, URLs, sanitized request bodies, status codes, and sanitized response bodies
+- tokens, authorization codes, signatures, Dev Keys, sensitive redirect URLs, and URL query strings are replaced or omitted from logs
 - `MakePayment()` accepts a backend-created `orderId`
 - a second `MakePayment()` call throws `InvalidOperationException` while the first payment is still active; it does not replace the first operation
 - payment fulfillment must be checked through the game backend; the Unity SDK does not validate postbacks or poll payment delivery

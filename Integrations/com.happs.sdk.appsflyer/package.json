@@ -1,0 +1,9 @@
+{
+  "name": "com.happs.sdk.appsflyer",
+  "displayName": "HApps AppsFlyer Integration",
+  "version": "0.1.0",
+  "description": "Optional Android installation attribution for HApps with the official AppsFlyer Unity SDK 6.18.1 included.",
+  "dependencies": {
+    "com.happs.sdk": "3.2.0"
+  }
+}

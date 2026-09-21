@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
@@ -19,11 +20,15 @@ namespace HAppsSDK
 		private const string MobileApiPath = "/api/v1/mobile";
 		private const string DeviceRegisterPath = MobileApiPath + "/device/register";
 		private const string InitSessionPath = MobileApiPath + "/session/init";
+		private const string AttributionPath = MobileApiPath + "/attribution";
 		private const string OidcStartPath = MobileApiPath + "/oidc/start";
 		private const string OidcExchangePath = MobileApiPath + "/oidc/exchange";
 		private const string OidcLogoutPath = MobileApiPath + "/oidc/logout";
 		private const string CreatePaymentPath = MobileApiPath + "/payments";
 		private const string CheckUpdatePath = MobileApiPath + "/app/check-update";
+		private static readonly Regex SensitiveJsonFieldRegex = new Regex(
+			"(\\\"(?:accessToken|access_token|refreshToken|refresh_token|idToken|id_token|oidcAccessToken|code|codeVerifier|code_verifier|clientSecret|client_secret|signature|devicePrivateKey|privateKey|appsFlyerDevKey|appsFlyerKey|authorizationUrl|logoutUrl|paymentUrl)\\\"\\s*:\\s*)\\\"(?:\\\\.|[^\\\"\\\\])*\\\"",
+			RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
 
 		private HAppsMobileAuthOptions _options;
 		private IMobileTokenStore _tokenStore = new InMemoryMobileTokenStore();
@@ -40,12 +45,88 @@ namespace HAppsSDK
 		private bool _loginInProgress;
 		private bool _disposed;
 		private int _stateVersion;
+		private string _appsFlyerKey;
+		private MobileAttributionData _attribution;
+		private string _attributionPayload;
+		private string _sentAttributionPayload;
+		private string _sentAttributionDeviceId;
 
 		public MobileSession CurrentSession => _currentSession;
+		public bool IsDisposed => _disposed;
+		public string AttributionStorageScope
+		{
+			get { EnsureConfigured(); return BuildTokenStorageKey(_options); }
+		}
+
+		public void SetAttribution(MobileAttributionData attribution)
+		{
+			ThrowIfDisposed();
+			if (attribution == null)
+				throw new ArgumentNullException(nameof(attribution));
+			attribution.Validate();
+			_attribution = attribution.Copy();
+			_attributionPayload = SerializeAttribution(_attribution);
+		}
+
+		public Task SendAttributionAsync(MobileAttributionData attribution)
+		{
+			EnsureConfigured();
+			if (_currentSession == null)
+				throw new InvalidOperationException("Initialize a mobile session before sending attribution.");
+			SetAttribution(attribution);
+			return FlushAttributionAsync();
+		}
+
+		public Task FlushAttributionAsync()
+		{
+			EnsureConfigured();
+			var stateVersion = CaptureStateVersion();
+			return RunSessionExclusiveAsync(stateVersion, async () =>
+			{
+				if (_currentSession == null || _attribution == null)
+					return;
+				if (_sentAttributionPayload == _attributionPayload && _sentAttributionDeviceId == _currentSession.DeviceId)
+					return;
+				var snapshot = _attribution.Copy();
+				var json = SerializeAttribution(snapshot);
+				var session = await EnsureActiveSessionInternalAsync(stateVersion);
+				var deviceId = session.DeviceId;
+				string responseText;
+				HAppsLog.Log("Sending mobile attribution");
+				try
+				{
+					responseText = await SendAuthorizedJsonPostAsync(
+						BuildPortalUrl(AttributionPath), session.AccessToken, json, HttpTimeoutSeconds);
+				}
+				catch (MobileApiException ex) when (IsRecoverableSessionError(ex))
+				{
+					session = await InitSessionInternalAsync(forceRefresh: true, stateVersion);
+					deviceId = session.DeviceId;
+					responseText = await SendAuthorizedJsonPostAsync(
+						BuildPortalUrl(AttributionPath), session.AccessToken, json, HttpTimeoutSeconds);
+				}
+				var response = JsonUtility.FromJson<AttributionResponse>(responseText);
+				ThrowIfStateInvalid(stateVersion);
+				if (response == null || !response.ok)
+					throw new InvalidOperationException("Attribution response is invalid.");
+				_sentAttributionPayload = json;
+				_sentAttributionDeviceId = deviceId;
+				HAppsLog.Log("Mobile attribution sent");
+			});
+		}
 
 		public void Configure(HAppsMobileAuthOptions options, IMobileTokenStore tokenStore = null)
 		{
 			ThrowIfDisposed();
+			if (options == null) throw new ArgumentNullException(nameof(options));
+			if (_options != null && BuildTokenStorageKey(_options) != BuildTokenStorageKey(options))
+			{
+				_appsFlyerKey = null;
+				_attribution = null;
+				_attributionPayload = null;
+				_sentAttributionPayload = null;
+				_sentAttributionDeviceId = null;
+			}
 			_options = options ?? throw new ArgumentNullException(nameof(options));
 			_tokenStore = tokenStore ?? CreateDefaultTokenStore(BuildTokenStorageKey(_options));
 			HAppsLog.Log("Mobile configured");
@@ -329,6 +410,7 @@ namespace HAppsSDK
 			_deepLinkListener = null;
 			_discovery = null;
 			_currentSession = null;
+			_appsFlyerKey = null;
 			_userData = null;
 			_loggedIn = false;
 		}
@@ -630,11 +712,8 @@ namespace HAppsSDK
 			var proof = CreateProofAsync("session-init", tokenSet);
 			var payload = new InitSessionRequest
 			{
-				clientId = _options.ClientId,
-				deviceId = tokenSet.DeviceId,
-				timestamp = proof.Timestamp,
-				nonce = proof.Nonce,
-				signature = proof.Signature
+				clientId = _options.ClientId, deviceId = tokenSet.DeviceId,
+				timestamp = proof.Timestamp, nonce = proof.Nonce, signature = proof.Signature
 			};
 
 			HAppsLog.Log("Requesting mobile session");
@@ -874,6 +953,7 @@ namespace HAppsSDK
 			tokenSet.Verified = response.verified;
 			await _tokenStore.SaveAsync(tokenSet);
 			ThrowIfStateInvalid(stateVersion);
+			_appsFlyerKey = response.appsFlyerKey;
 			return ApplyCachedSession(tokenSet);
 		}
 
@@ -882,6 +962,7 @@ namespace HAppsSDK
 			_currentSession = new MobileSession
 			{
 				DeviceId = tokenSet.DeviceId,
+				AppsFlyerKey = _appsFlyerKey,
 				AccessToken = tokenSet.AccessToken,
 				AccessTokenExpiresAtUtc = tokenSet.AccessTokenExpiresAtUtc,
 				PublicId = tokenSet.PublicId,
@@ -908,6 +989,7 @@ namespace HAppsSDK
 			_userData = null;
 			_loggedIn = false;
 			_currentSession = null;
+			_appsFlyerKey = null;
 			await _tokenStore.ClearAsync();
 		}
 
@@ -935,11 +1017,13 @@ namespace HAppsSDK
 
 		private static async Task<string> SendGetAsync(string url, int timeoutSeconds)
 		{
+			LogHttpRequest("GET", url, null);
 			using var request = UnityWebRequest.Get(url);
 			request.timeout = timeoutSeconds;
 			request.SetRequestHeader("Accept", "application/json");
 			var operation = request.SendWebRequest();
 			await AwaitAsyncOperation(operation);
+			LogHttpResponse("GET", url, request.responseCode, request.downloadHandler.text);
 
 			if (request.result != UnityWebRequest.Result.Success)
 			{
@@ -954,7 +1038,7 @@ namespace HAppsSDK
 			where TResponse : class
 		{
 			var json = JsonUtility.ToJson(payload);
-			HAppsLog.Log("Sending JSON POST");
+			LogHttpRequest("POST", url, json);
 			using var request = new UnityWebRequest(url, UnityWebRequest.kHttpVerbPOST);
 			request.timeout = timeoutSeconds;
 			request.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(json));
@@ -965,6 +1049,7 @@ namespace HAppsSDK
 			await AwaitAsyncOperation(operation);
 
 			var responseText = request.downloadHandler.text;
+			LogHttpResponse("POST", url, request.responseCode, responseText);
 			if (request.result != UnityWebRequest.Result.Success)
 			{
 				HAppsLog.Error($"POST request failed: statusCode={request.responseCode}, error={request.error}");
@@ -976,6 +1061,7 @@ namespace HAppsSDK
 
 		private static async Task<string> SendAuthorizedJsonPostAsync(string url, string bearerToken, string json, int timeoutSeconds)
 		{
+			LogHttpRequest("POST", url, json ?? "{}");
 			using var request = new UnityWebRequest(url, UnityWebRequest.kHttpVerbPOST);
 			request.timeout = timeoutSeconds;
 			request.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(json ?? "{}"));
@@ -985,6 +1071,7 @@ namespace HAppsSDK
 			request.SetRequestHeader("Authorization", $"Bearer {bearerToken}");
 			var operation = request.SendWebRequest();
 			await AwaitAsyncOperation(operation);
+			LogHttpResponse("POST", url, request.responseCode, request.downloadHandler.text);
 
 			if (request.result != UnityWebRequest.Result.Success)
 			{
@@ -993,6 +1080,20 @@ namespace HAppsSDK
 			}
 
 			return request.downloadHandler.text;
+		}
+
+		private static string SerializeAttribution(MobileAttributionData attribution)
+		{
+			return JsonUtility.ToJson(new AttributionPayload
+			{
+				provider = attribution.Provider,
+				providerInstallId = attribution.ProviderInstallId,
+				mediaSource = attribution.MediaSource,
+				campaign = attribution.Campaign,
+				campaignId = attribution.CampaignId,
+				status = attribution.Status,
+				observedAt = attribution.ObservedAt
+			});
 		}
 
 		private static async Task<OidcTokenResponse> ExchangeCodeAsync(
@@ -1013,7 +1114,12 @@ namespace HAppsSDK
 			};
 
 			var payload = ToQueryString(form);
-			HAppsLog.Log("Exchanging authorization code");
+			if (HAppsLog.EnableDebug)
+			{
+				var debugPayload = $"grant_type=authorization_code&client_id={Uri.EscapeDataString(clientId ?? string.Empty)}" +
+					$"&code=[redacted]&redirect_uri={Uri.EscapeDataString(redirectUri ?? string.Empty)}&code_verifier=[redacted]";
+				LogHttpRequest("POST", tokenEndpoint, debugPayload);
+			}
 			using var request = new UnityWebRequest(tokenEndpoint, UnityWebRequest.kHttpVerbPOST);
 			request.timeout = timeoutSeconds;
 			request.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(payload));
@@ -1024,6 +1130,7 @@ namespace HAppsSDK
 			await AwaitAsyncOperation(operation);
 
 			var responseText = request.downloadHandler.text;
+			LogHttpResponse("POST", tokenEndpoint, request.responseCode, responseText);
 			if (request.result != UnityWebRequest.Result.Success)
 			{
 				HAppsLog.Error($"Token exchange failed: statusCode={request.responseCode}, error={request.error}");
@@ -1035,6 +1142,37 @@ namespace HAppsSDK
 				throw new InvalidOperationException("Token exchange response does not contain access_token.");
 
 			return response;
+		}
+
+		private static void LogHttpRequest(string method, string url, string body)
+		{
+			if (!HAppsLog.EnableDebug)
+				return;
+
+			var data = string.IsNullOrEmpty(body) ? "<empty>" : SanitizeLogData(body);
+			HAppsLog.Log($"HTTP {method} {SanitizeLogUrl(url)} request={data}");
+		}
+
+		private static void LogHttpResponse(string method, string url, long statusCode, string body)
+		{
+			if (!HAppsLog.EnableDebug)
+				return;
+
+			var data = string.IsNullOrEmpty(body) ? "<empty>" : SanitizeLogData(body);
+			HAppsLog.Log($"HTTP {method} {SanitizeLogUrl(url)} response={statusCode} data={data}");
+		}
+
+		private static string SanitizeLogData(string value)
+		{
+			return SensitiveJsonFieldRegex.Replace(value, "$1\"[redacted]\"");
+		}
+
+		private static string SanitizeLogUrl(string value)
+		{
+			if (!Uri.TryCreate(value, UriKind.Absolute, out var uri))
+				return value;
+
+			return uri.GetLeftPart(UriPartial.Path);
 		}
 
 		private static Task AwaitAsyncOperation(AsyncOperation operation)
@@ -1458,8 +1596,27 @@ namespace HAppsSDK
 		}
 
 		[Serializable]
+		private sealed class AttributionResponse
+		{
+			public bool ok;
+		}
+
+		[Serializable]
+		private sealed class AttributionPayload
+		{
+			public string provider;
+			public string providerInstallId;
+			public string mediaSource;
+			public string campaign;
+			public string campaignId;
+			public string status;
+			public long observedAt;
+		}
+
+		[Serializable]
 		private sealed class InitSessionResponse
 		{
+			public string appsFlyerKey;
 			public string accessToken;
 			public int expiresIn;
 			public string publicId;
