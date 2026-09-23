@@ -58,7 +58,7 @@ The Dev Key is configured on the backend per mobile client, not in the game. `se
 
 `DebugLogging` controls the official AppsFlyer SDK debug output. Disable it in production builds.
 
-Advertising identifier collection is disabled by default, so the adapter does not require Google Play Services' `AdvertisingIdClient`. Set `CollectAdvertisingIdentifiers = true` only when GAID/OAID/AAID collection is required; the game must then provide the corresponding platform libraries.
+Advertising identifier collection is enabled by default. The package includes Google Play Services' `play-services-ads-identifier`, so AppsFlyer can collect GAID on supported Android devices without additional Google configuration. Set `CollectAdvertisingIdentifiers = false` when the game must disable GAID/OAID/AAID collection.
 
 The adapter is Android-only; initialization in the Editor explicitly throws. No AppsFlyer prefab or second init/start script is needed. Native callbacks are preserved for IL2CPP.
 

@@ -4,6 +4,7 @@
     <package>com.appsflyer:af-android-sdk:6.18.1</package>
     <package>com.appsflyer:purchase-connector:2.2.0</package>
     <package>com.appsflyer:unity-wrapper:6.18.1</package>
+    <package>com.google.android.gms:play-services-ads-identifier:18.2.0</package>
   </packages>
   <files />
   <settings>

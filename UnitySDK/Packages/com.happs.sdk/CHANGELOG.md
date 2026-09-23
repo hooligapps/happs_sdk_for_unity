@@ -6,7 +6,7 @@
 - Add a dedicated Bearer-authenticated mobile attribution API with serialized submission and retries
 - Read optional generic `analyticProvider` and `analyticKey` configuration from the `session/init` response
 - Preserve the original `session/init` request and signature for all clients
-- Add an optional AppsFlyer adapter in `Integrations/com.happs.sdk.appsflyer`; core SDK has no AppsFlyer dependency
+- Add an optional AppsFlyer adapter in `Integrations/com.happs.sdk.appsflyer` with GAID collection enabled by default; core SDK has no AppsFlyer dependency
 - Document the required backend contract in `ATTRIBUTION.md`
 
 ## 3.1.2

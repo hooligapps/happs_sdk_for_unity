@@ -4,7 +4,7 @@ namespace HAppsSDK.Attribution
 	{
 		public bool UseExistingSdk;
 		public bool ManageCustomerUserId = true;
-		public bool CollectAdvertisingIdentifiers;
+		public bool CollectAdvertisingIdentifiers = true;
 		public bool DebugLogging;
 	}
 }
