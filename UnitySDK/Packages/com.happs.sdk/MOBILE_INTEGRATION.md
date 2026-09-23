@@ -144,7 +144,8 @@ bool signedIn = session.IsAuthorized;
 | `AccessToken` | short-lived HApps mobile token |
 | `AccessTokenExpiresAtUtc` | token expiry in Unix seconds |
 | `DeviceId` | installation ID, not a player ID |
-| `AppsFlyerKey` | SDK 3.2.0: optional server configuration for the AppsFlyer adapter; never log this value |
+| `AnalyticProvider` | SDK 3.2.0: optional analytics provider name, such as `appsflyer` |
+| `AnalyticKey` | SDK 3.2.0: optional provider SDK key; never log this value |
 
 Use `IsAuthorized`, not `Verified`, to determine login state. Load the profile and progress from the game backend using `PublicId`.
 

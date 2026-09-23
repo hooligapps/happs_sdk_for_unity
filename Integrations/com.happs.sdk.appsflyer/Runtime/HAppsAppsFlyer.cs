@@ -26,6 +26,7 @@ namespace HAppsSDK.Attribution
 		private string _customerId;
 		private string _deviceId;
 		private string _pendingConversion;
+		private string _waitingReason;
 		private MobileAttributionData _data;
 
 		public static void Initialize(HAppsAppsFlyerOptions options)
@@ -87,13 +88,27 @@ namespace HAppsSDK.Attribution
 			if (!_started)
 			{
 				var initialSession = _mobile.CurrentSession;
-				if (initialSession == null) return;
+				if (initialSession == null)
+				{
+					LogWaiting("mobile session");
+					return;
+				}
 				if (!_external)
 				{
-					if (string.IsNullOrWhiteSpace(initialSession.AppsFlyerKey)) return;
+					if (!string.Equals(initialSession.AnalyticProvider, "appsflyer", StringComparison.OrdinalIgnoreCase))
+					{
+						LogWaiting("analyticProvider=appsflyer");
+						return;
+					}
+					if (string.IsNullOrWhiteSpace(initialSession.AnalyticKey))
+					{
+						LogWaiting("analyticKey");
+						return;
+					}
+					LogDebug("Starting AppsFlyer SDK");
 					AppsFlyer.setIsDebug(_debugLogging);
 					AppsFlyer.setDisableAdvertisingIdentifiers(!_collectAdvertisingIdentifiers);
-					AppsFlyer.initSDK(initialSession.AppsFlyerKey, null, this);
+					AppsFlyer.initSDK(initialSession.AnalyticKey, null, this);
 				}
 				if (_manageCustomerId)
 				{
@@ -102,6 +117,8 @@ namespace HAppsSDK.Attribution
 				}
 				if (!_external) AppsFlyer.startSDK();
 				_started = true;
+				_waitingReason = null;
+				LogDebug("AppsFlyer SDK started");
 			}
 			var installId = AppsFlyer.getAppsFlyerId();
 			if (string.IsNullOrWhiteSpace(installId)) return;
@@ -207,6 +224,19 @@ namespace HAppsSDK.Attribution
 
 		private static void Warn(Exception ex)
 			=> Debug.LogWarning("[HAppsAppsFlyer] Attribution operation failed: " + ex.GetType().Name);
+
+		private void LogWaiting(string reason)
+		{
+			if (_waitingReason == reason) return;
+			_waitingReason = reason;
+			LogDebug("Waiting for " + reason);
+		}
+
+		private void LogDebug(string message)
+		{
+			if (_debugLogging)
+				Debug.Log("[HAppsAppsFlyer] " + message);
+		}
 
 		[Preserve] public void onConversionDataSuccess(string data) => ReceiveConversion(data);
 		[Preserve] public void onConversionDataFail(string error)

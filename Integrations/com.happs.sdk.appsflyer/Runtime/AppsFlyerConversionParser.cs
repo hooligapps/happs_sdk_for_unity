@@ -21,7 +21,12 @@ namespace HAppsSDK.Attribution
 			{
 				Provider = "appsflyer", ProviderInstallId = installId, Status = status,
 				MediaSource = Read(fields, "media_source"), Campaign = Read(fields, "campaign"),
-				CampaignId = Read(fields, "campaign_id"), ObservedAt = observedAt
+				CampaignId = Read(fields, "campaign_id"),
+				CustomData = Read(fields, "custom_data"),
+				HaffCid = Read(fields, "af_sub1"),
+				HaffPid = Read(fields, "media_source"),
+				UtmCampaign = Read(fields, "campaign"),
+				ObservedAt = observedAt
 			};
 			data.Validate();
 			return data;

@@ -27,7 +27,7 @@ namespace HAppsSDK
 		private const string CreatePaymentPath = MobileApiPath + "/payments";
 		private const string CheckUpdatePath = MobileApiPath + "/app/check-update";
 		private static readonly Regex SensitiveJsonFieldRegex = new Regex(
-			"(\\\"(?:accessToken|access_token|refreshToken|refresh_token|idToken|id_token|oidcAccessToken|code|codeVerifier|code_verifier|clientSecret|client_secret|signature|devicePrivateKey|privateKey|appsFlyerDevKey|appsFlyerKey|authorizationUrl|logoutUrl|paymentUrl)\\\"\\s*:\\s*)\\\"(?:\\\\.|[^\\\"\\\\])*\\\"",
+			"(\\\"(?:accessToken|access_token|refreshToken|refresh_token|idToken|id_token|oidcAccessToken|code|codeVerifier|code_verifier|clientSecret|client_secret|signature|devicePrivateKey|privateKey|analyticKey|authorizationUrl|logoutUrl|paymentUrl)\\\"\\s*:\\s*)\\\"(?:\\\\.|[^\\\"\\\\])*\\\"",
 			RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
 
 		private HAppsMobileAuthOptions _options;
@@ -45,7 +45,8 @@ namespace HAppsSDK
 		private bool _loginInProgress;
 		private bool _disposed;
 		private int _stateVersion;
-		private string _appsFlyerKey;
+		private string _analyticProvider;
+		private string _analyticKey;
 		private MobileAttributionData _attribution;
 		private string _attributionPayload;
 		private string _sentAttributionPayload;
@@ -121,7 +122,8 @@ namespace HAppsSDK
 			if (options == null) throw new ArgumentNullException(nameof(options));
 			if (_options != null && BuildTokenStorageKey(_options) != BuildTokenStorageKey(options))
 			{
-				_appsFlyerKey = null;
+				_analyticProvider = null;
+				_analyticKey = null;
 				_attribution = null;
 				_attributionPayload = null;
 				_sentAttributionPayload = null;
@@ -410,7 +412,8 @@ namespace HAppsSDK
 			_deepLinkListener = null;
 			_discovery = null;
 			_currentSession = null;
-			_appsFlyerKey = null;
+			_analyticProvider = null;
+			_analyticKey = null;
 			_userData = null;
 			_loggedIn = false;
 		}
@@ -953,7 +956,8 @@ namespace HAppsSDK
 			tokenSet.Verified = response.verified;
 			await _tokenStore.SaveAsync(tokenSet);
 			ThrowIfStateInvalid(stateVersion);
-			_appsFlyerKey = response.appsFlyerKey;
+			_analyticProvider = response.analyticProvider;
+			_analyticKey = response.analyticKey;
 			return ApplyCachedSession(tokenSet);
 		}
 
@@ -962,7 +966,8 @@ namespace HAppsSDK
 			_currentSession = new MobileSession
 			{
 				DeviceId = tokenSet.DeviceId,
-				AppsFlyerKey = _appsFlyerKey,
+				AnalyticProvider = _analyticProvider,
+				AnalyticKey = _analyticKey,
 				AccessToken = tokenSet.AccessToken,
 				AccessTokenExpiresAtUtc = tokenSet.AccessTokenExpiresAtUtc,
 				PublicId = tokenSet.PublicId,
@@ -989,7 +994,8 @@ namespace HAppsSDK
 			_userData = null;
 			_loggedIn = false;
 			_currentSession = null;
-			_appsFlyerKey = null;
+			_analyticProvider = null;
+			_analyticKey = null;
 			await _tokenStore.ClearAsync();
 		}
 
@@ -1088,9 +1094,10 @@ namespace HAppsSDK
 			{
 				provider = attribution.Provider,
 				providerInstallId = attribution.ProviderInstallId,
-				mediaSource = attribution.MediaSource,
-				campaign = attribution.Campaign,
-				campaignId = attribution.CampaignId,
+				haff_pid = attribution.HaffPid,
+				utm_campaign = attribution.UtmCampaign,
+				haff_cid = attribution.HaffCid,
+				custom_data = attribution.CustomData,
 				status = attribution.Status,
 				observedAt = attribution.ObservedAt
 			});
@@ -1606,9 +1613,10 @@ namespace HAppsSDK
 		{
 			public string provider;
 			public string providerInstallId;
-			public string mediaSource;
-			public string campaign;
-			public string campaignId;
+			public string haff_pid;
+			public string utm_campaign;
+			public string haff_cid;
+			public string custom_data;
 			public string status;
 			public long observedAt;
 		}
@@ -1616,7 +1624,8 @@ namespace HAppsSDK
 		[Serializable]
 		private sealed class InitSessionResponse
 		{
-			public string appsFlyerKey;
+			public string analyticProvider;
+			public string analyticKey;
 			public string accessToken;
 			public int expiresIn;
 			public string publicId;

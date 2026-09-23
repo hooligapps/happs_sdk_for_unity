@@ -24,7 +24,7 @@ EDM4U is build tooling used by the bundled SDK to resolve its Android Maven libr
 
 ## Backend prerequisite
 
-Deploy the [attribution API contract](../../UnitySDK/Packages/com.happs.sdk/ATTRIBUTION.md) before enabling the adapter. The server must return `appsFlyerKey` from `session/init` and implement `POST /api/v1/mobile/attribution`. The session request and its signature remain unchanged. Without a key, the adapter stays idle and the game can continue.
+Deploy the [attribution API contract](../../UnitySDK/Packages/com.happs.sdk/ATTRIBUTION.md) before enabling the adapter. The server must return `analyticProvider: "appsflyer"` and `analyticKey` from `session/init`, and implement `POST /api/v1/mobile/attribution`. The session request and its signature remain unchanged. Without this configuration, the adapter stays idle and the game can continue.
 
 ## Start
 
@@ -54,7 +54,7 @@ HAppsAppsFlyer.StartTracking();
 var session = await HApps.Mobile.InitSessionAsync();
 ```
 
-The Dev Key is configured on the backend per mobile client, not in the game. `session.AppsFlyerKey` exposes the optional `appsFlyerKey` response field. The adapter starts once when both StartTracking and a session with a nonblank key are available. Missing keys are not errors; a later refresh can supply one. Once the native SDK starts, changing/removing the key in a later session response does not reinitialize or stop it; native stopping/consent remains application-owned. The key is kept in memory and is not logged or persisted by HApps.
+The Dev Key is configured on the backend per mobile client, not in the game. `session.AnalyticProvider` and `session.AnalyticKey` expose the generic analytics configuration. The adapter starts once when `StartTracking()` has been requested, the provider is `appsflyer`, and the key is nonblank. Missing configuration is not an error; a later refresh can supply it. Once the native SDK starts, changing/removing the configuration in a later session response does not reinitialize or stop it; native stopping/consent remains application-owned. The key is kept in memory and is not logged or persisted by HApps.
 
 `DebugLogging` controls the official AppsFlyer SDK debug output. Disable it in production builds.
 
@@ -79,9 +79,9 @@ Use `ManageCustomerUserId = false` if the game already manages AppsFlyer's Custo
 ## Behavior
 
 - Starts after HApps session initialization (including an anonymous session); account login is not required. Failure or absence of conversion data does not turn an installation into organic traffic.
-- Reads `af_status`, `media_source`, `campaign`, `campaign_id`. Explicit organic results are accepted without campaign fields. Unknown/malformed results are ignored with sanitized logs.
+- Maps the required Portal Affiliates fields from AppsFlyer: `media_source` to `HaffPid`, `campaign` to `UtmCampaign`, and `af_sub1` to `HaffCid`. The value of the `custom_data` attribution-link parameter is forwarded unchanged as a string; the SDK does not parse its JSON. Explicit organic results are accepted without campaign fields. Unknown/malformed results are ignored with sanitized logs.
 - Stores AppsFlyer ID with `pending` status until conversion data becomes available. This ID can be linked to HApps before the campaign is known.
-- Persists only normalized attribution in PlayerPrefs, scoped by PortalUrl + ClientId. No credentials or full callback payloads are stored/logged. PlayerPrefs is untrusted client storage.
+- Persists normalized attribution and the `custom_data` object in PlayerPrefs, scoped by PortalUrl + ClientId. No credentials or full callback payloads are stored/logged. PlayerPrefs is untrusted client storage.
 - Restores attribution only if its AppsFlyer installation ID matches the current native ID. Logout keeps attribution; switching environments discards the old binding.
 - `session/init` never carries attribution. `FlushAttributionAsync` sends the pending snapshot through the dedicated `/attribution` API with the existing mobile-session Bearer token. If another snapshot arrives during that request, the next periodic check sends it. Successful duplicate flushes do not make HTTP requests. Manual integrations can call `HApps.Mobile.SendAttributionAsync(data)` after session initialization.
 - Checks binding once per second, pending synchronization every 30 seconds, and retries failures with delays increasing from 2 to 60 seconds. Failed data remains available for subsequent attribution retries and application launches. An expired token is renewed through the existing session flow; a recoverable 401 is retried once.
@@ -94,3 +94,14 @@ Use `ManageCustomerUserId = false` if the game already manages AppsFlyer's Custo
 Configure the Android app and attribution links in AppsFlyer, including the website/APK download destination. Test a fresh install from a link, an organic install, delayed launch/network changes, guest → login → logout, and offline callback/retry. Verify the AppsFlyer dashboard and backend link by game + AppsFlyer ID. The SDK records first launch, not the APK download itself. Out-of-store matching remains subject to AppsFlyer's attribution coverage.
 
 Compilation checks do not validate Android Keystore signing, native dependency resolution, or live AppsFlyer matching.
+
+The mobile attribution endpoint receives `haff_pid`, `utm_campaign`, and `haff_cid` as primary fields. The complete AppsFlyer `custom_data` value is sent under the same `custom_data` name as a string; its JSON keys must already use the server's internal names.
+
+Example attribution-link parameters before URL encoding:
+
+```text
+pid=demo-partner-alpha
+c=demo-campaign
+af_sub1=5b9cc1d5-d722-463f-9288-b505a79526c7
+custom_data={"link_id":"demo-link-00","game":"passion-industry","offer_id":"demo-offer-private"}
+```

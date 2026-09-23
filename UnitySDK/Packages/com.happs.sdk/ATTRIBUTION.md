@@ -1,10 +1,10 @@
 # Mobile attribution API (SDK 3.2.0)
 
-The backend needs two changes: return the optional AppsFlyer Dev Key from session initialization and accept attribution through a separate endpoint. This repository implements the Unity client; deploy backend support before enabling the adapter.
+The backend needs two changes: return the optional analytics-provider configuration from session initialization and accept attribution through a separate endpoint. This repository implements the Unity client; deploy backend support before enabling the adapter.
 
-## 1. Return AppsFlyer configuration
+## 1. Return analytics configuration
 
-`POST /api/v1/mobile/session/init` keeps its existing request and authentication unchanged. Add the optional `appsFlyerKey` field to its response:
+`POST /api/v1/mobile/session/init` keeps its existing request and authentication unchanged. Add the optional `analyticProvider` and `analyticKey` fields to its response:
 
 ```json
 {
@@ -12,13 +12,14 @@ The backend needs two changes: return the optional AppsFlyer Dev Key from sessio
   "expiresIn": 3600,
   "publicId": "player-id",
   "verified": false,
-  "appsFlyerKey": "configured-appsflyer-dev-key"
+  "analyticProvider": "appsflyer",
+  "analyticKey": "configured-appsflyer-dev-key"
 }
 ```
 
-Resolve the key from the configuration of the verified mobile client. Return it for anonymous sessions as well. If AppsFlyer is not configured, omit the field or return null/empty. This is the client SDK Dev Key, not a server Reporting API credential.
+Resolve both values from the configuration of the verified mobile client. Return them for anonymous sessions as well. If analytics is not configured, omit the fields or return null/empty. For AppsFlyer, `analyticKey` is the client SDK Dev Key, not a server Reporting API credential.
 
-The SDK exposes it as `MobileSession.AppsFlyerKey`. It is kept in memory, not logged or persisted. The optional adapter starts once both a session with a nonblank key and an explicit `StartTracking()` request are available. Missing keys do not block the game. A later session refresh can supply a key; changes after native AppsFlyer startup do not automatically restart or stop that SDK.
+The SDK exposes the values as `MobileSession.AnalyticProvider` and `MobileSession.AnalyticKey`. The key is kept in memory, not logged or persisted. The optional AppsFlyer adapter starts once the provider is `appsflyer`, the key is nonblank, and `StartTracking()` has been requested. Missing configuration does not block the game. A later session refresh can supply it; changes after native AppsFlyer startup do not automatically restart or stop that SDK.
 
 ## 2. Accept attribution
 
@@ -34,9 +35,10 @@ The body contains the attribution fields directly:
 {
   "provider": "appsflyer",
   "providerInstallId": "appsflyer-install-id",
-  "mediaSource": "partner",
-  "campaign": "summer",
-  "campaignId": "42",
+  "haff_pid": "partner",
+  "utm_campaign": "summer",
+  "haff_cid": "affiliate-click-id",
+  "custom_data": "{\"link_id\":\"partner-main\",\"game\":\"passion-industry\"}",
   "status": "non-organic",
   "observedAt": 1700000000
 }
@@ -48,10 +50,12 @@ Field rules:
 
 - `provider`: `appsflyer` for this integration.
 - `providerInstallId`: required, nonblank AppsFlyer installation ID.
-- `mediaSource`, `campaign`, `campaignId`: optional strings; may be null/empty.
+- `haff_pid`, `utm_campaign`, `haff_cid`: primary Portal Affiliates fields mapped from AppsFlyer `media_source`, `campaign`, and `af_sub1`.
+- `custom_data`: the unchanged string returned by AppsFlyer for the same-name custom attribution-link parameter. The server can parse it as JSON when needed.
 - `status`: `pending`, `organic` or `non-organic`. Pending means the installation ID is known but conversion data has not arrived. Missing source/campaign does not imply organic.
 - `observedAt`: positive Unix timestamp in seconds when the client observed the result.
 - Each attribution string: maximum 1024 UTF-8 bytes.
+- `custom_data`: maximum 16384 UTF-8 bytes after URL decoding by AppsFlyer.
 
 Save the attribution against the installation and its current device/player association, then return HTTP 200:
 

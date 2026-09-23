@@ -9,10 +9,10 @@ public sealed class HAppsMobileSample : MonoBehaviour
 {
     [Header("Server Flow")]
     [SerializeField] private string portalUrl = "https://portal.igra.rocks";
-    [SerializeField] private string clientId = "lustage-mobile";
+    [SerializeField] private string clientId = "passion-industry-android";
 
     [Header("Update Test Data")]
-    [SerializeField] private int versionCode = 101;
+    [SerializeField] private int versionCode = 104;
 
     [Header("Payment Test Data")]
     [SerializeField] private string productId = "test-product";
@@ -80,8 +80,8 @@ public sealed class HAppsMobileSample : MonoBehaviour
             {
                 PortalUrl = portalUrl,
                 ClientId = clientId,
-                RedirectUri = "com.hooligapps.lustage://auth/callback",
-                PostLogoutRedirectUri = "com.hooligapps.lustage://logout"
+                RedirectUri = "happs.passion.industry://auth/callback",
+                PostLogoutRedirectUri = "happs.passion.industry://auth/logout"
             });
 
             _isConfigured = true;
@@ -180,7 +180,7 @@ public sealed class HAppsMobileSample : MonoBehaviour
             var session = await HApps.Mobile.InitSessionAsync();
             _isLoggedIn = session.IsAuthorized;
             _socialId = HApps.Mobile.CurrentUser?.userName ?? "-";
-            LogStatus($"initSession: deviceId={session.DeviceId}, publicId={session.PublicId}, verified={session.Verified}, isAuthorized={session.IsAuthorized}, appsFlyerConfigured={!string.IsNullOrWhiteSpace(session.AppsFlyerKey)}, accessTokenLength={session.AccessToken?.Length ?? 0}, expiresAt={session.AccessTokenExpiresAtUtc}");
+            LogStatus($"initSession: deviceId={session.DeviceId}, publicId={session.PublicId}, verified={session.Verified}, isAuthorized={session.IsAuthorized}, analyticProvider={session.AnalyticProvider ?? "-"}, analyticConfigured={!string.IsNullOrWhiteSpace(session.AnalyticKey)}, accessTokenLength={session.AccessToken?.Length ?? 0}, expiresAt={session.AccessTokenExpiresAtUtc}");
         }
         catch (Exception ex)
         {
@@ -205,7 +205,7 @@ public sealed class HAppsMobileSample : MonoBehaviour
             var session = await HApps.Mobile.RefreshSessionAsync();
             _isLoggedIn = session.IsAuthorized;
             _socialId = HApps.Mobile.CurrentUser?.userName ?? "-";
-            LogStatus($"re-init session: deviceId={session.DeviceId}, publicId={session.PublicId}, verified={session.Verified}, isAuthorized={session.IsAuthorized}, appsFlyerConfigured={!string.IsNullOrWhiteSpace(session.AppsFlyerKey)}, accessTokenLength={session.AccessToken?.Length ?? 0}, expiresAt={session.AccessTokenExpiresAtUtc}");
+            LogStatus($"re-init session: deviceId={session.DeviceId}, publicId={session.PublicId}, verified={session.Verified}, isAuthorized={session.IsAuthorized}, analyticProvider={session.AnalyticProvider ?? "-"}, analyticConfigured={!string.IsNullOrWhiteSpace(session.AnalyticKey)}, accessTokenLength={session.AccessToken?.Length ?? 0}, expiresAt={session.AccessTokenExpiresAtUtc}");
         }
         catch (Exception ex)
         {

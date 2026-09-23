@@ -2,8 +2,9 @@
 
 ## 3.2.0 (unreleased)
 
+- Map Portal Affiliates fields from AppsFlyer, send the three primary fields directly, and forward `custom_data` unchanged
 - Add a dedicated Bearer-authenticated mobile attribution API with serialized submission and retries
-- Read optional AppsFlyer Dev Key configuration from the `session/init` response
+- Read optional generic `analyticProvider` and `analyticKey` configuration from the `session/init` response
 - Preserve the original `session/init` request and signature for all clients
 - Add an optional AppsFlyer adapter in `Integrations/com.happs.sdk.appsflyer`; core SDK has no AppsFlyer dependency
 - Document the required backend contract in `ATTRIBUTION.md`

@@ -3,7 +3,8 @@ namespace HAppsSDK
 	public sealed class MobileSession
 	{
 		public string DeviceId;
-		public string AppsFlyerKey;
+		public string AnalyticProvider;
+		public string AnalyticKey;
 		public string AccessToken;
 		public long AccessTokenExpiresAtUtc;
 		public string PublicId;
