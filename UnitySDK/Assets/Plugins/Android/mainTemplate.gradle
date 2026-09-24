@@ -8,8 +8,9 @@ dependencies {
 // Android Resolver Dependencies Start
     implementation 'com.android.installreferrer:installreferrer:2.1' // Packages/com.happs.sdk.appsflyer/ThirdParty/AppsFlyer/Editor/AppsFlyerDependencies.xml:7
     implementation 'com.appsflyer:af-android-sdk:6.18.1' // Packages/com.happs.sdk.appsflyer/ThirdParty/AppsFlyer/Editor/AppsFlyerDependencies.xml:5
-    implementation 'com.appsflyer:purchase-connector:2.2.0' // Packages/com.happs.sdk.appsflyer/ThirdParty/AppsFlyer/Editor/AppsFlyerDependencies.xml:8
+    implementation 'com.appsflyer:purchase-connector:2.2.0' // Packages/com.happs.sdk.appsflyer/ThirdParty/AppsFlyer/Editor/AppsFlyerDependencies.xml:9
     implementation 'com.appsflyer:unity-wrapper:6.18.1' // Packages/com.happs.sdk.appsflyer/ThirdParty/AppsFlyer/Editor/AppsFlyerDependencies.xml:6
+    implementation 'com.google.android.gms:play-services-ads-identifier:18.2.0' // Packages/com.happs.sdk.appsflyer/ThirdParty/AppsFlyer/Editor/AppsFlyerDependencies.xml:8
 // Android Resolver Dependencies End
 **DEPS**}
 

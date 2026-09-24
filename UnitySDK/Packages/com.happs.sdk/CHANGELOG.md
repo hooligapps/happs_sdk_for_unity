@@ -2,6 +2,8 @@
 
 ## 3.2.0 (unreleased)
 
+- Add a mobile 3.1.2 to 3.2.0 migration guide covering optional AppsFlyer setup, GAID and Android dependencies
+- Keep pending attribution available through `HApps.Mobile.CurrentAttribution` without sending it to the server
 - Map Portal Affiliates fields from AppsFlyer, send the three primary fields directly, and forward `custom_data` unchanged
 - Add a dedicated Bearer-authenticated mobile attribution API with serialized submission and retries
 - Read optional generic `analyticProvider` and `analyticKey` configuration from the `session/init` response

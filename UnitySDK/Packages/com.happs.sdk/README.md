@@ -1,8 +1,7 @@
 # HApps Unity SDK
 
 Development version: **3.2.0 (unreleased)**. The installation example below refers to the existing stable release.
-Optional mobile attribution is described in [ATTRIBUTION.md](ATTRIBUTION.md).
-The separate [AppsFlyer adapter](../../../Integrations/com.happs.sdk.appsflyer/README.md) is not a dependency of this package.
+Optional mobile attribution is provided by the separate [AppsFlyer adapter](../../../Integrations/com.happs.sdk.appsflyer/README.md), which is not a dependency of this package.
 
 Unity SDK 3.1.2 for HApps WebGL integrations through JS SDK 1.1.0 and native Android integrations.
 
@@ -23,6 +22,8 @@ Use a release tag such as `v3.1.2`. During development you can temporarily point
 For an existing WebGL project, follow [WebGL Migration: SDK 2.0.6 to 3.1.1](MIGRATION_WEB_2.0.6_TO_3.1.1.md).
 
 For native Android integration, follow [Mobile Integration](MOBILE_INTEGRATION.md).
+
+For an existing Android project, follow [Mobile Migration: SDK 3.1.2 to 3.2.0](MIGRATION_MOBILE_3.1.2_TO_3.2.0.md). It covers the compatible core-only update and the optional AppsFlyer setup.
 
 ## Runtime API
 
@@ -45,6 +46,7 @@ bool HApps.Web.IsReady()
 Task<MobileSession> HApps.Mobile.InitSessionAsync()
 Task<MobileLoginResult> HApps.Mobile.LoginAsync()
 Task<MobileSession> HApps.Mobile.RefreshSessionAsync()
+MobileAttributionData HApps.Mobile.CurrentAttribution
 Task HApps.Mobile.SendAttributionAsync(MobileAttributionData attribution)
 void HApps.Mobile.SetAttribution(MobileAttributionData attribution)
 Task HApps.Mobile.FlushAttributionAsync()

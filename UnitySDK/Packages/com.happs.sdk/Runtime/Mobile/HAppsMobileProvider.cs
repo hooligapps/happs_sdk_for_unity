@@ -53,6 +53,7 @@ namespace HAppsSDK
 		private string _sentAttributionDeviceId;
 
 		public MobileSession CurrentSession => _currentSession;
+		public MobileAttributionData CurrentAttribution => _attribution?.Copy();
 		public bool IsDisposed => _disposed;
 		public string AttributionStorageScope
 		{
@@ -84,7 +85,7 @@ namespace HAppsSDK
 			var stateVersion = CaptureStateVersion();
 			return RunSessionExclusiveAsync(stateVersion, async () =>
 			{
-				if (_currentSession == null || _attribution == null)
+				if (_currentSession == null || _attribution == null || _attribution.Status == "pending")
 					return;
 				if (_sentAttributionPayload == _attributionPayload && _sentAttributionDeviceId == _currentSession.DeviceId)
 					return;

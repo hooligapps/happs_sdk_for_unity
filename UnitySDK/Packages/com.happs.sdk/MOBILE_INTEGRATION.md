@@ -1,10 +1,10 @@
 # HApps Mobile Integration
 
-For optional AppsFlyer attribution in SDK 3.2.0, see [Attribution contract](ATTRIBUTION.md) and the [separate integration package](../../../Integrations/com.happs.sdk.appsflyer/README.md). Deploy backend support before enabling the adapter. The existing SDK 3.1.2 flow below does not require AppsFlyer.
+This guide describes the native Android flow in SDK 3.2.0. Existing projects should start with [Mobile Migration: SDK 3.1.2 to 3.2.0](MIGRATION_MOBILE_3.1.2_TO_3.2.0.md). Optional AppsFlyer attribution is implemented by the [separate integration package](../../../Integrations/com.happs.sdk.appsflyer/README.md).
 
 ## 1. Requirements and environments
 
-- HApps Unity SDK `3.1.2`.
+- HApps Unity SDK `3.2.0`.
 - Android API 23 or newer.
 - iOS is not supported.
 
@@ -34,12 +34,14 @@ Add the package to `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.1.2"
+    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#<happs-ref>"
   }
 }
 ```
 
-Use a release tag, not `main`.
+Use `v3.2.0` after the release is published. While integrating the unreleased version, replace `<happs-ref>` with the supplied commit; do not use `main`.
+
+Add the separate AppsFlyer package only when the game needs install attribution. Its installation and initialization are documented in [HApps AppsFlyer integration](../../../Integrations/com.happs.sdk.appsflyer/README.md).
 
 ## 3. Configure Android deep links
 

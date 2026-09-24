@@ -1,6 +1,6 @@
 # HApps Unity SDK
 
-Development version: **3.2.0 (unreleased)**. Optional Android attribution is available through the separate [AppsFlyer integration package](Integrations/com.happs.sdk.appsflyer/README.md), which includes the official AppsFlyer Unity SDK 6.18.1. It requires the [updated backend contract](UnitySDK/Packages/com.happs.sdk/ATTRIBUTION.md); the stable installation example below remains on 3.1.2.
+Development version: **3.2.0 (unreleased)**. Optional Android attribution is available through the separate [AppsFlyer integration package](Integrations/com.happs.sdk.appsflyer/README.md), which includes the official AppsFlyer Unity SDK 6.18.1. The stable installation example below remains on 3.1.2.
 
 Unity SDK 3.1.2 for HApps WebGL integrations through JS SDK 1.1.0 and native Android integrations.
 
@@ -21,6 +21,8 @@ The SDK is distributed as a Unity package from:
 - `UnitySDK/Packages/com.happs.sdk`
 
 Upgrading an existing WebGL integration from SDK 2.0.6: see [WebGL Migration: 2.0.6 to 3.1.1](UnitySDK/Packages/com.happs.sdk/MIGRATION_WEB_2.0.6_TO_3.1.1.md).
+
+Upgrading an existing Android project from SDK 3.1.2 and optionally enabling AppsFlyer: see [Mobile Migration: 3.1.2 to 3.2.0](UnitySDK/Packages/com.happs.sdk/MIGRATION_MOBILE_3.1.2_TO_3.2.0.md).
 
 For native Android integration, follow [Mobile Integration](UnitySDK/Packages/com.happs.sdk/MOBILE_INTEGRATION.md).
 
@@ -53,6 +55,10 @@ bool HApps.Web.IsReady()
 Task<MobileSession> HApps.Mobile.InitSessionAsync()
 Task<MobileLoginResult> HApps.Mobile.LoginAsync()
 Task<MobileSession> HApps.Mobile.RefreshSessionAsync()
+MobileAttributionData HApps.Mobile.CurrentAttribution
+Task HApps.Mobile.SendAttributionAsync(MobileAttributionData attribution)
+void HApps.Mobile.SetAttribution(MobileAttributionData attribution)
+Task HApps.Mobile.FlushAttributionAsync()
 Task<MobileCreatePaymentResult> HApps.Mobile.CreatePaymentAsync(MobileCreatePaymentRequest request)
 Task<MobileCheckUpdateResult> HApps.Mobile.CheckForUpdateAsync(int versionCode)
 Task HApps.Mobile.LogoutAsync()

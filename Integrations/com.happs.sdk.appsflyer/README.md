@@ -1,30 +1,28 @@
 # HApps AppsFlyer integration 0.1.0
 
-Optional Android integration for HApps SDK 3.2.0. The package already contains the official AppsFlyer Unity SDK **6.18.1**, so a game must not install another copy. AppsFlyer 7 has a different API and is not supported by this adapter. No `Distribution`/`setOutOfStore` value is set: the same APK can be distributed through Google Play and your website.
+Optional Android attribution for HApps SDK 3.2.0. The package includes AppsFlyer Unity SDK **6.18.1**; remove any other AppsFlyer Unity plugin before installing it. AppsFlyer 7 is not supported.
+
+Projects upgrading from HApps SDK 3.1.2 should follow [Mobile Migration: SDK 3.1.2 to 3.2.0](../../UnitySDK/Packages/com.happs.sdk/MIGRATION_MOBILE_3.1.2_TO_3.2.0.md).
 
 ## Installation
 
-This package lives outside the sample project's `Packages` directory intentionally. Unity automatically loads embedded packages in that directory; the base SDK sample must remain usable without AppsFlyer.
-
-Add these dependencies to the consuming game's `Packages/manifest.json`. Replace `<happs-commit>` with the commit containing this implementation; it is not available in the old `v3.1.2` release. Once released, use the corresponding release tag for both HApps packages.
+Add these dependencies to `Packages/manifest.json`. Use the same release tag or commit for both HApps packages.
 
 ```json
 {
   "dependencies": {
-    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#<happs-commit>",
-    "com.happs.sdk.appsflyer": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/Integrations/com.happs.sdk.appsflyer#<happs-commit>",
+    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#<happs-ref>",
+    "com.happs.sdk.appsflyer": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/Integrations/com.happs.sdk.appsflyer#<happs-ref>",
     "com.google.external-dependency-manager": "https://github.com/googlesamples/unity-jar-resolver.git?path=upm#v1.2.188"
   }
 }
 ```
 
-For local development, reference the HApps packages with `file:` paths. A game using only `com.happs.sdk` needs neither the adapter nor EDM4U.
+Run `Assets > External Dependency Manager > Android Resolver > Force Resolve` before building. Assemblies that call the adapter must reference `HAppsSDK` and `HAppsSDK.AppsFlyer`.
 
-EDM4U is build tooling used by the bundled SDK to resolve its Android Maven libraries. It does not install another copy of the AppsFlyer Unity SDK. Resolve Android dependencies before building. If your scripts use assembly definitions, reference `HAppsSDK` and `HAppsSDK.AppsFlyer`. The bundled AppsFlyer sources retain their MIT license in [`ThirdParty/AppsFlyer/LICENSE`](ThirdParty/AppsFlyer/LICENSE). See the official [installation guide](https://dev.appsflyer.com/hc/docs/installation) for Android build requirements.
+## HApps configuration
 
-## Backend prerequisite
-
-Deploy the [attribution API contract](../../UnitySDK/Packages/com.happs.sdk/ATTRIBUTION.md) before enabling the adapter. The server must return `analyticProvider: "appsflyer"` and `analyticKey` from `session/init`, and implement `POST /api/v1/mobile/attribution`. The session request and its signature remain unchanged. Without this configuration, the adapter stays idle and the game can continue.
+Send HApps the game's mobile `ClientId` and AppsFlyer Dev Key. The game backend does not need changes.
 
 ## Start
 
@@ -47,24 +45,26 @@ HAppsAppsFlyer.Initialize(new HAppsAppsFlyerOptions
 {
     DebugLogging = true
 });
-// Request tracking after any required consent. The adapter waits for session/init and its key.
+// Request tracking after any required consent. The adapter waits for HApps configuration.
 HAppsAppsFlyer.StartTracking();
 #endif
 
 var session = await HApps.Mobile.InitSessionAsync();
 ```
 
-The Dev Key is configured on the backend per mobile client, not in the game. `session.AnalyticProvider` and `session.AnalyticKey` expose the generic analytics configuration. The adapter starts once when `StartTracking()` has been requested, the provider is `appsflyer`, and the key is nonblank. Missing configuration is not an error; a later refresh can supply it. Once the native SDK starts, changing/removing the configuration in a later session response does not reinitialize or stop it; native stopping/consent remains application-owned. The key is kept in memory and is not logged or persisted by HApps.
+The adapter receives the Dev Key from HApps and waits for the mobile session before starting AppsFlyer.
 
 `DebugLogging` controls the official AppsFlyer SDK debug output. Disable it in production builds.
 
-Advertising identifier collection is enabled by default. The package includes Google Play Services' `play-services-ads-identifier`, so AppsFlyer can collect GAID on supported Android devices without additional Google configuration. Set `CollectAdvertisingIdentifiers = false` when the game must disable GAID/OAID/AAID collection.
+GAID collection is enabled by default. Set `CollectAdvertisingIdentifiers = false` to disable advertising identifiers.
 
-The adapter is Android-only; initialization in the Editor explicitly throws. No AppsFlyer prefab or second init/start script is needed. Native callbacks are preserved for IL2CPP.
+No AppsFlyer manifest entries are required in the game. The Android manifest merger adds `ACCESS_NETWORK_STATE` and `com.google.android.gms.permission.AD_ID` from the included libraries.
+
+The adapter is Android-only. Do not add an AppsFlyer prefab or another initialization script.
 
 ## Existing AppsFlyer integration
 
-Set `UseExistingSdk = true` to leave init/start and native callback ownership with the game. Initialize the HApps adapter before forwarding callbacks, start the game's AppsFlyer instance once, then call `HAppsAppsFlyer.StartTracking()` to enable synchronization once a HApps session exists. In this mode the game owns native configuration; the adapter does not require or apply the server key. Forward the complete **conversion-data** callback:
+If the game already initializes AppsFlyer, set `UseExistingSdk = true`, initialize the HApps adapter first and forward the conversion-data callback:
 
 ```csharp
 public void onConversionDataSuccess(string json)
@@ -74,34 +74,23 @@ public void onConversionDataSuccess(string json)
 }
 ```
 
-Use `ManageCustomerUserId = false` if the game already manages AppsFlyer's Customer User ID. Otherwise HApps manages it: current PublicId when a session exists, AppsFlyer installation ID when logged out. Identity changes are reconciled on the next poll (up to one second); the adapter does not emit login or purchase events. Code emitting identity-sensitive events immediately after login/logout should set the appropriate Customer User ID itself with `ManageCustomerUserId = false`.
+Call `HAppsAppsFlyer.StartTracking()` after starting the existing AppsFlyer instance. Set `ManageCustomerUserId = false` if the game manages AppsFlyer's Customer User ID.
 
 ## Behavior
 
-- Starts after HApps session initialization (including an anonymous session); account login is not required. Failure or absence of conversion data does not turn an installation into organic traffic.
-- Maps the required Portal Affiliates fields from AppsFlyer: `media_source` to `HaffPid`, `campaign` to `UtmCampaign`, and `af_sub1` to `HaffCid`. The value of the `custom_data` attribution-link parameter is forwarded unchanged as a string; the SDK does not parse its JSON. Explicit organic results are accepted without campaign fields. Unknown/malformed results are ignored with sanitized logs.
-- Stores AppsFlyer ID with `pending` status until conversion data becomes available. This ID can be linked to HApps before the campaign is known.
-- Persists normalized attribution and the `custom_data` object in PlayerPrefs, scoped by PortalUrl + ClientId. No credentials or full callback payloads are stored/logged. PlayerPrefs is untrusted client storage.
-- Restores attribution only if its AppsFlyer installation ID matches the current native ID. Logout keeps attribution; switching environments discards the old binding.
-- `session/init` never carries attribution. `FlushAttributionAsync` sends the pending snapshot through the dedicated `/attribution` API with the existing mobile-session Bearer token. If another snapshot arrives during that request, the next periodic check sends it. Successful duplicate flushes do not make HTTP requests. Manual integrations can call `HApps.Mobile.SendAttributionAsync(data)` after session initialization.
-- Checks binding once per second, pending synchronization every 30 seconds, and retries failures with delays increasing from 2 to 60 seconds. Failed data remains available for subsequent attribution retries and application launches. An expired token is renewed through the existing session flow; a recoverable 401 is retried once.
-- Does not register a device just to send attribution. A queued flush rechecks the session after acquiring the session lock and is cancelled by logout/disposal.
-- `HApps.Shutdown()` ends this adapter's binding; it does not stop the native AppsFlyer SDK. Configure once for the app lifetime; do not shut down and reinitialize HApps during scene changes. The application owns AppsFlyer consent/revocation and native SDK stopping.
-- Direct/deferred deep-link navigation and re-engagement are outside this package's first version. App-open attribution callbacks never overwrite installation attribution. Existing auth/payment deep links continue to use HApps' listener.
+- Starts for anonymous and authorized mobile sessions.
+- Maps `media_source` to `haff_pid`, `campaign` to `utm_campaign`, and `af_sub1` to `haff_cid`.
+- Forwards `custom_data` unchanged as a string.
+- Keeps `pending` locally until AppsFlyer returns conversion data. Only `organic` and `non-organic` are sent to HApps.
+- Tracks installation attribution only. Deep-link navigation and re-engagement are not included.
 
-## Verify on a device
+Read the current local state through `HApps.Mobile.CurrentAttribution`:
 
-Configure the Android app and attribution links in AppsFlyer, including the website/APK download destination. Test a fresh install from a link, an organic install, delayed launch/network changes, guest → login → logout, and offline callback/retry. Verify the AppsFlyer dashboard and backend link by game + AppsFlyer ID. The SDK records first launch, not the APK download itself. Out-of-store matching remains subject to AppsFlyer's attribution coverage.
-
-Compilation checks do not validate Android Keystore signing, native dependency resolution, or live AppsFlyer matching.
-
-The mobile attribution endpoint receives `haff_pid`, `utm_campaign`, and `haff_cid` as primary fields. The complete AppsFlyer `custom_data` value is sent under the same `custom_data` name as a string; its JSON keys must already use the server's internal names.
-
-Example attribution-link parameters before URL encoding:
-
-```text
-pid=demo-partner-alpha
-c=demo-campaign
-af_sub1=5b9cc1d5-d722-463f-9288-b505a79526c7
-custom_data={"link_id":"demo-link-00","game":"passion-industry","offer_id":"demo-offer-private"}
+```csharp
+MobileAttributionData attribution = HApps.Mobile.CurrentAttribution;
+Debug.Log(attribution?.Status ?? "not available");
 ```
+
+## Verify
+
+Follow the [migration verification steps](../../UnitySDK/Packages/com.happs.sdk/MIGRATION_MOBILE_3.1.2_TO_3.2.0.md#7-verify-the-upgrade).

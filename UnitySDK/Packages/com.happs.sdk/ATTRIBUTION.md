@@ -52,7 +52,7 @@ Field rules:
 - `providerInstallId`: required, nonblank AppsFlyer installation ID.
 - `haff_pid`, `utm_campaign`, `haff_cid`: primary Portal Affiliates fields mapped from AppsFlyer `media_source`, `campaign`, and `af_sub1`.
 - `custom_data`: the unchanged string returned by AppsFlyer for the same-name custom attribution-link parameter. The server can parse it as JSON when needed.
-- `status`: `pending`, `organic` or `non-organic`. Pending means the installation ID is known but conversion data has not arrived. Missing source/campaign does not imply organic.
+- `status`: `organic` or `non-organic`. The client keeps `pending` locally and does not send it to this endpoint. Missing source/campaign does not imply organic.
 - `observedAt`: positive Unix timestamp in seconds when the client observed the result.
 - Each attribution string: maximum 1024 UTF-8 bytes.
 - `custom_data`: maximum 16384 UTF-8 bytes after URL decoding by AppsFlyer.
@@ -65,7 +65,7 @@ Save the attribution against the installation and its current device/player asso
 
 Return the same response for an already saved duplicate. Empty responses/204 and `ok: false` are not acknowledgements in the current SDK.
 
-Use `(clientId, provider, providerInstallId)` to identify the installation. Repeated submission must not create another installation. A pending record can be completed by resolved attribution; do not overwrite a resolved source with pending. Keep the first acquisition separate from later corrections if your analytics needs that distinction. On login, maintain the player association through your existing device/player relationship. HApps DeviceId can change on logout; it is not the lifetime AppsFlyer installation ID.
+Use `(clientId, provider, providerInstallId)` to identify the installation. Repeated submission must not create another installation. Keep the first acquisition separate from later corrections if your analytics needs that distinction. On login, maintain the player association through your existing device/player relationship. HApps DeviceId can change on logout; it is not the lifetime AppsFlyer installation ID.
 
 Return the existing mobile API error format. For an expired/invalid session use the same recoverable 401 codes as other mobile endpoints: `mobile_session_expired` or `invalid_mobile_session`. The SDK renews the session and retries once. Other failures remain pending for adapter retries. These are client-reported analytics fields, not independently verified AppsFlyer evidence.
 
@@ -76,4 +76,4 @@ await HApps.Mobile.InitSessionAsync();
 await HApps.Mobile.SendAttributionAsync(data);
 ```
 
-The adapter queues data with `SetAttribution(data)` and submits with `FlushAttributionAsync()`. Both operate on Unity's main thread. Flush requires an existing session and does nothing after logout. It uses the existing token, refreshing it when necessary. An acknowledgement applies only to the snapshot sent; a callback arriving during HTTP remains pending. Duplicate successful snapshots for the same device do not produce another HTTP request. Logout cancels queued work and preserves attribution for a subsequent session. Attribution is never added to the session/init request.
+The adapter queues data with `SetAttribution(data)` and submits with `FlushAttributionAsync()`. Both operate on Unity's main thread. Pending data is available through `HApps.Mobile.CurrentAttribution`, and flush does not send it. Flush requires an existing session and does nothing after logout. It uses the existing token, refreshing it when necessary. An acknowledgement applies only to the snapshot sent. Duplicate successful snapshots for the same device do not produce another HTTP request. Logout cancels queued work and preserves attribution for a subsequent session. Attribution is never added to the session/init request.
