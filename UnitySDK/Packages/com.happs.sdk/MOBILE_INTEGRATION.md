@@ -10,7 +10,7 @@ This guide describes the native Android flow in SDK 3.2.0. Existing projects sho
 
 | Environment | `PortalUrl` |
 | --- | --- |
-| DEV | `https://portal.igra.rocks` |
+| DEV | `https://portal.example.com` |
 | PROD | `https://hooli.games` |
 
 Use DEV for integration testing and PROD for production builds. Client configuration, releases, players, devices, and tokens are environment-specific.
@@ -84,7 +84,7 @@ using HAppsSDK;
 
 HApps.ConfigureMobile(new HAppsMobileAuthOptions
 {
-    PortalUrl = "https://portal.igra.rocks",
+    PortalUrl = "https://portal.example.com",
     ClientId = "my-game-mobile",
     RedirectUri = "com.example.game://auth/callback",
     PostLogoutRedirectUri = "com.example.game://logout"

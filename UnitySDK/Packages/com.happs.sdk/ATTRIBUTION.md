@@ -38,7 +38,7 @@ The body contains the attribution fields directly:
   "haff_pid": "partner",
   "utm_campaign": "summer",
   "haff_cid": "affiliate-click-id",
-  "custom_data": "{\"link_id\":\"partner-main\",\"game\":\"passion-industry\"}",
+  "custom_data": "{\"link_id\":\"partner-main\",\"game\":\"sample-game\"}",
   "status": "non-organic",
   "observedAt": 1700000000
 }

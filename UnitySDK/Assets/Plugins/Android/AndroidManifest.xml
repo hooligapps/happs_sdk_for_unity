@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="happs.passion.industry">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.example.game">
   <application>
     <activity android:name="com.unity3d.player.UnityPlayerActivity" android:exported="true" android:launchMode="singleTask" android:theme="@style/UnityThemeSelector">
       <intent-filter>
@@ -10,19 +10,19 @@
         <action android:name="android.intent.action.VIEW" />
         <category android:name="android.intent.category.DEFAULT" />
         <category android:name="android.intent.category.BROWSABLE" />
-        <data android:scheme="happs.passion.industry" android:host="auth" android:path="/callback" />
+        <data android:scheme="com.example.game" android:host="auth" android:path="/callback" />
       </intent-filter>
       <intent-filter android:label="auth-logout">
         <action android:name="android.intent.action.VIEW" />
         <category android:name="android.intent.category.DEFAULT" />
         <category android:name="android.intent.category.BROWSABLE" />
-        <data android:scheme="happs.passion.industry" android:host="auth" android:path="/logout" />
+        <data android:scheme="com.example.game" android:host="auth" android:path="/logout" />
       </intent-filter>
       <intent-filter android:label="payment-callback">
         <action android:name="android.intent.action.VIEW" />
         <category android:name="android.intent.category.DEFAULT" />
         <category android:name="android.intent.category.BROWSABLE" />
-        <data android:scheme="happs.passion.industry" android:host="payment" android:path="/callback" />
+        <data android:scheme="com.example.game" android:host="payment" android:path="/callback" />
       </intent-filter>
       <meta-data android:name="unityplayer.UnityActivity" android:value="true" />
     </activity>

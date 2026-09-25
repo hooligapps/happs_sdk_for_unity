@@ -40,7 +40,7 @@ using HAppsSDK.Attribution;
 
 HApps.ConfigureMobile(new HAppsMobileAuthOptions
 {
-    PortalUrl = "https://portal.igra.rocks",
+    PortalUrl = "https://portal.example.com",
     ClientId = "my-game-mobile",
     RedirectUri = "com.example.game://auth/callback",
     PostLogoutRedirectUri = "com.example.game://logout"

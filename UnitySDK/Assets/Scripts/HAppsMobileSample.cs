@@ -8,8 +8,8 @@ using UnityEngine;
 public sealed class HAppsMobileSample : MonoBehaviour
 {
     [Header("Server Flow")]
-    [SerializeField] private string portalUrl = "https://portal.igra.rocks";
-    [SerializeField] private string clientId = "passion-industry-android";
+    [SerializeField] private string portalUrl = "https://portal.example.com";
+    [SerializeField] private string clientId = "sample-game-android";
 
     [Header("Update Test Data")]
     [SerializeField] private int versionCode = 104;
@@ -80,8 +80,8 @@ public sealed class HAppsMobileSample : MonoBehaviour
             {
                 PortalUrl = portalUrl,
                 ClientId = clientId,
-                RedirectUri = "happs.passion.industry://auth/callback",
-                PostLogoutRedirectUri = "happs.passion.industry://auth/logout"
+                RedirectUri = "com.example.game://auth/callback",
+                PostLogoutRedirectUri = "com.example.game://auth/logout"
             });
 
             _isConfigured = true;

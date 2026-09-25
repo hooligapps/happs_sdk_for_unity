@@ -369,8 +369,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4d93219acb154b0eb8fd5e2fd5a80e6d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HAppsMobileSample
-  portalUrl: https://portal.igra.rocks
-  clientId: passion-industry-android
+  portalUrl: https://portal.example.com
+  clientId: sample-game-android
   versionCode: 107
   productId: test-product
   price: 1.99
