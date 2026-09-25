@@ -1,6 +1,6 @@
 # Changelog
 
-## 3.2.0 (unreleased)
+## 3.2.0
 
 - Add a mobile 3.1.2 to 3.2.0 migration guide covering optional AppsFlyer setup, GAID and Android dependencies
 - Keep pending attribution available through `HApps.Mobile.CurrentAttribution` without sending it to the server

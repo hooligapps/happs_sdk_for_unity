@@ -1,9 +1,7 @@
 # HApps Unity SDK
 
-Development version: **3.2.0 (unreleased)**. The installation example below refers to the existing stable release.
+Unity SDK 3.2.0 for HApps WebGL integrations through JS SDK 1.1.0 and native Android integrations.
 Optional mobile attribution is provided by the separate [AppsFlyer adapter](../../../Integrations/com.happs.sdk.appsflyer/README.md), which is not a dependency of this package.
-
-Unity SDK 3.1.2 for HApps WebGL integrations through JS SDK 1.1.0 and native Android integrations.
 
 ## Installation
 
@@ -12,12 +10,12 @@ Add the package to your Unity project through `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.1.2"
+    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.2.0"
   }
 }
 ```
 
-Use a release tag such as `v3.1.2`. During development you can temporarily point to a commit hash instead of a tag.
+Use the release tag `v3.2.0`.
 
 For an existing WebGL project, follow [WebGL Migration: SDK 2.0.6 to 3.1.1](MIGRATION_WEB_2.0.6_TO_3.1.1.md).
 

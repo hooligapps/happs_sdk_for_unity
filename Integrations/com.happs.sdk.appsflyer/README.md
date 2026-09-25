@@ -6,13 +6,13 @@ Projects upgrading from HApps SDK 3.1.2 should follow [Mobile Migration: SDK 3.1
 
 ## Installation
 
-Add these dependencies to `Packages/manifest.json`. Use the same release tag or commit for both HApps packages.
+Add these dependencies to `Packages/manifest.json`:
 
 ```json
 {
   "dependencies": {
-    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#<happs-ref>",
-    "com.happs.sdk.appsflyer": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/Integrations/com.happs.sdk.appsflyer#<happs-ref>",
+    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.2.0",
+    "com.happs.sdk.appsflyer": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/Integrations/com.happs.sdk.appsflyer#v3.2.0",
     "com.google.external-dependency-manager": "https://github.com/googlesamples/unity-jar-resolver.git?path=upm#v1.2.188"
   }
 }

@@ -34,12 +34,10 @@ Add the package to `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#<happs-ref>"
+    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.2.0"
   }
 }
 ```
-
-Use `v3.2.0` after the release is published. While integrating the unreleased version, replace `<happs-ref>` with the supplied commit; do not use `main`.
 
 Add the separate AppsFlyer package only when the game needs install attribution. Its installation and initialization are documented in [HApps AppsFlyer integration](../../../Integrations/com.happs.sdk.appsflyer/README.md).
 

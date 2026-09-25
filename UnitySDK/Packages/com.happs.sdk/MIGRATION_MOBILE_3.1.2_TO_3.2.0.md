@@ -10,13 +10,13 @@ For AppsFlyer attribution, ask HApps to enable AppsFlyer for the mobile client, 
 
 ## 2. Update package references
 
-Use the same release tag or commit for both HApps packages. Replace `<happs-ref>` with `v3.2.0` after that release is published, or with the supplied commit while integrating the unreleased version.
+Use the same `v3.2.0` release tag for both HApps packages.
 
 ```json
 {
   "dependencies": {
-    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#<happs-ref>",
-    "com.happs.sdk.appsflyer": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/Integrations/com.happs.sdk.appsflyer#<happs-ref>",
+    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.2.0",
+    "com.happs.sdk.appsflyer": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/Integrations/com.happs.sdk.appsflyer#v3.2.0",
     "com.google.external-dependency-manager": "https://github.com/googlesamples/unity-jar-resolver.git?path=upm#v1.2.188"
   }
 }

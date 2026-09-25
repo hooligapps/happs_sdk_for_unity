@@ -1,8 +1,6 @@
 # HApps Unity SDK
 
-Development version: **3.2.0 (unreleased)**. Optional Android attribution is available through the separate [AppsFlyer integration package](Integrations/com.happs.sdk.appsflyer/README.md), which includes the official AppsFlyer Unity SDK 6.18.1. The stable installation example below remains on 3.1.2.
-
-Unity SDK 3.1.2 for HApps WebGL integrations through JS SDK 1.1.0 and native Android integrations.
+Unity SDK 3.2.0 for HApps WebGL integrations through JS SDK 1.1.0 and native Android integrations. Optional Android attribution is available through the separate [AppsFlyer integration package](Integrations/com.happs.sdk.appsflyer/README.md), which includes the official AppsFlyer Unity SDK 6.18.1.
 
 ## Installation
 
@@ -11,7 +9,7 @@ Add the package to your Unity project through `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.1.2"
+    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.2.0"
   }
 }
 ```
@@ -505,4 +503,4 @@ Expected response shape:
 
 ## Version
 
-HApps Unity SDK - Integration Guide v3.1.2 (JS SDK 1.1.0)
+HApps Unity SDK - Integration Guide v3.2.0 (JS SDK 1.1.0)
