@@ -14,6 +14,9 @@ namespace HAppsSDK
         public event Action<UserData, SignatureData> OnPortalAuthCompleted;
         public event Action<UserData> OnUserChanged;
         public event Action<HAppsErrorData> OnError;
+        internal event Action<double> Tick;
+
+        private void Update() => Tick?.Invoke(Time.realtimeSinceStartupAsDouble);
 
         public void OnMessage(string json)
         {
@@ -85,7 +88,7 @@ namespace HAppsSDK
 
 #if UNITY_WEBGL && !UNITY_EDITOR
         [DllImport("__Internal")]
-        private static extern void _sendMessage(string type, string message);
+        private static extern int _sendMessage(string type, string message);
         [DllImport("__Internal")]
         private static extern int _isPortalSite();
         [DllImport("__Internal")]
@@ -95,7 +98,7 @@ namespace HAppsSDK
         [DllImport("__Internal")]
         private static extern void _focusWindow();
 #else
-        private static void _sendMessage(string type, string message) { }
+        private static int _sendMessage(string type, string message) { return 1; }
         private static int _isPortalSite() { return 0; }
         private static int _isReady() { return 1; }
         private static void _redirect(string url) { }
@@ -105,7 +108,12 @@ namespace HAppsSDK
         public void SendMessage(string type, string payloadJson)
         {
             HAppsLog.Log($"Unity → JS: {type}");
-            _sendMessage(type, payloadJson);
+            if (_sendMessage(type, payloadJson) == 0)
+                throw new HAppsException(new HAppsErrorData
+                {
+                    code = "bridge_unavailable",
+                    message = "Initialize HApps and attach the Unity bridge before calling the SDK."
+                });
         }
         
         public void RunNextFrame(Action action)

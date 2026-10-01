@@ -1,6 +1,6 @@
 # HApps Unity SDK
 
-Unity SDK 3.2.0 for HApps WebGL integrations through JS SDK 1.1.0 and native Android integrations.
+Unity SDK 3.3.0 for HApps WebGL integrations through JS SDK 1.1.0 and native Android integrations.
 Optional mobile attribution is provided by the separate [AppsFlyer adapter](../../../Integrations/com.happs.sdk.appsflyer/README.md), which is not a dependency of this package.
 
 ## Installation
@@ -10,18 +10,23 @@ Add the package to your Unity project through `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.2.0"
+    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.3.0",
+    "com.google.external-dependency-manager": "https://github.com/googlesamples/unity-jar-resolver.git?path=upm#v1.2.188"
   }
 }
 ```
 
-Use the release tag `v3.2.0`.
+Use the release tag `v3.3.0`.
+
+Run `Assets > External Dependency Manager > Android Resolver > Force Resolve` for Android builds. The mobile SDK uses AndroidX Browser Custom Tabs for authentication and logout, and Auth Tab with a Custom Tab fallback for payment.
 
 For an existing WebGL project, follow [WebGL Migration: SDK 2.0.6 to 3.1.1](MIGRATION_WEB_2.0.6_TO_3.1.1.md).
 
 For native Android integration, follow [Mobile Integration](MOBILE_INTEGRATION.md).
 
 For an existing Android project, follow [Mobile Migration: SDK 3.1.2 to 3.2.0](MIGRATION_MOBILE_3.1.2_TO_3.2.0.md). It covers the compatible core-only update and the optional AppsFlyer setup.
+
+For changes made after the `v3.2.0` release, follow [Updating from HApps SDK 3.2.0](MIGRATION_FROM_3.2.0.md).
 
 ## Runtime API
 
@@ -44,6 +49,8 @@ bool HApps.Web.IsReady()
 Task<MobileSession> HApps.Mobile.InitSessionAsync()
 Task<MobileLoginResult> HApps.Mobile.LoginAsync()
 Task<MobileSession> HApps.Mobile.RefreshSessionAsync()
+MobileSession HApps.Mobile.CurrentSession
+event Action<MobileSession, MobileSession> HApps.Mobile.SessionChanged
 MobileAttributionData HApps.Mobile.CurrentAttribution
 Task HApps.Mobile.SendAttributionAsync(MobileAttributionData attribution)
 void HApps.Mobile.SetAttribution(MobileAttributionData attribution)
@@ -57,12 +64,36 @@ void HApps.SetDebugLogging(bool enabled)
 void HApps.Shutdown()
 ```
 
+Awaited WebGL and mobile operations also provide `CancellationToken` overloads. See [Updating from HApps SDK 3.2.0](MIGRATION_FROM_3.2.0.md) for changed lifecycle and error behavior.
+
+### `MobileAttributionData`
+
+`HApps.Mobile.CurrentAttribution` returns the latest local attribution snapshot:
+
+| Field | Description |
+| --- | --- |
+| `Provider` | Attribution provider; the optional adapter uses `appsflyer` |
+| `ProviderInstallId` | Provider installation ID |
+| `MediaSource` | Raw provider media source |
+| `Campaign` | Raw provider campaign name |
+| `CampaignId` | Raw provider campaign ID |
+| `HaffPid` | Partner ID mapped from AppsFlyer `media_source` |
+| `UtmCampaign` | Campaign mapped from AppsFlyer `campaign` |
+| `HaffCid` | Click ID mapped from AppsFlyer `af_sub1` |
+| `CustomData` | Original AppsFlyer `custom_data` string |
+| `QueryParams` | `custom_data` JSON without `referrer` and `referer` |
+| `Referer` | Value extracted from `referrer`, or from `referer` when `referrer` is absent |
+| `Status` | `pending`, `organic`, or `non-organic` |
+| `ObservedAt` | Unix timestamp in seconds when attribution was received |
+
+`QueryParams` and `Referer` are available to the game through `CurrentAttribution`. The attribution request continues to send the original `CustomData` value.
+
 ## WebGL Bridge Requirements
 
 Your WebGL page must:
 
 - load `https://cdn.hooli.games/sdk/1.1.0/hooligapps.js`
-- use the JS SDK `1.1.0` contract; unversioned builds are not supported by Unity SDK `3.1.2`
+- use the JS SDK `1.1.0` contract; unversioned builds are not supported by Unity SDK `3.3.0`
 - initialize the core client with `HApps.init(...)`
 - attach Unity with `HApps.unity.attach(...)`
 - use `objectName: "HAppsJSBridge"`
@@ -114,7 +145,7 @@ private void OnDisable()
 
 private void HandleAuthCompleted(UserData user, SignatureData signature)
 {
-    Debug.Log($"auth_complete: {user?.userId}, {signature?.signature}");
+    Debug.Log($"auth_complete: {user?.userId}");
 }
 ```
 

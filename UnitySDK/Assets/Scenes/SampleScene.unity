@@ -370,13 +370,14 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HAppsMobileSample
   portalUrl: https://portal.example.com
-  clientId: sample-game-android
-  versionCode: 107
-  productId: test-product
+  clientId: sample-game-mobile
+  appLinkBaseUrl: https://links.example.com/games/sample-game/app
+  versionCode: 1
+  productId: sample-product
   price: 1.99
   currency: USD
-  description: Test payment
-  requestId: req-001
+  description: Sample payment
+  requestId: sample-request-001
   showDebugGui: 1
 --- !u!4 &1522833689
 Transform:

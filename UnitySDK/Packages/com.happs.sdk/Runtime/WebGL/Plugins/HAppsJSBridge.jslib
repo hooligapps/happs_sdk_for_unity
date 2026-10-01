@@ -8,10 +8,11 @@ mergeInto(LibraryManager.library, {
             !window.HApps.unity ||
             typeof window.HApps.unity.receive !== "function") {
             console.error("[HApps] window.HApps.unity.receive not available");
-            return;
+            return 0;
         }
 
         window.HApps.unity.receive(jsType, jsMessage);
+        return 1;
     },
     
     _isPortalSite: function () {

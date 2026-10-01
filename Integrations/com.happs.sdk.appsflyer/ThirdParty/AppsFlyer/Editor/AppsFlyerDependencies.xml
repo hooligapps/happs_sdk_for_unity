@@ -6,12 +6,10 @@
     <androidPackage spec="com.appsflyer:unity-wrapper:6.18.1"></androidPackage>
     <androidPackage spec="com.android.installreferrer:installreferrer:2.1"></androidPackage>
     <androidPackage spec="com.google.android.gms:play-services-ads-identifier:18.2.0"></androidPackage>
-    <androidPackage spec="com.appsflyer:purchase-connector:2.2.0"></androidPackage>
   </androidPackages>
 
   <iosPods>
     <iosPod name="AppsFlyerFramework" version="6.18.1" minTargetSdk="12.0"></iosPod>
-    <iosPod name="PurchaseConnector" version="6.18.2" minTargetSdk="12.0"></iosPod>
   </iosPods>
 
 </dependencies>

@@ -1,5 +1,25 @@
 # Changelog
 
+## 3.3.0
+
+- Add a migration guide for projects updating from `v3.2.0`
+- Open mobile authentication and logout in an Android Custom Tab that forwards verified redirects to the application, preferring Chrome when available
+- Close the Android payment browser on its verified HTTPS callback through Auth Tab, with a Custom Tab fallback
+- Wait for the server logout confirmation and preserve the mobile session when logout is cancelled
+- Use Unity update-driven Web deadlines and cancellation instead of managed timers
+- Reject concurrent same-type Web requests; match payment callbacks by existing order ID
+- Isolate event subscriber exceptions and fail fast when the JS bridge is unavailable
+- Consume mobile login callbacks once, validate error state and cancel the complete login chain
+- Copy mobile configuration and reject reconfiguration until shutdown
+- Add cancellable operations, session snapshots/events and public typed HTTP errors
+- Validate and snapshot mobile payment requests; reject concurrent order creation
+- Dispose and restart the optional AppsFlyer adapter with its mobile provider lifecycle
+- Remove the unused AppsFlyer Purchase Connector dependency from the attribution package
+- Expose AppsFlyer custom data without `referrer` as `QueryParams` and expose the extracted URL as `Referer`
+- Remove the obsolete unitypackage distribution
+- Use one verified Android App Link per game for authentication, logout and payment returns
+- Allow the verified callback URI to use the same host as `PortalUrl` or a separate host
+
 ## 3.2.0
 
 - Add a mobile 3.1.2 to 3.2.0 migration guide covering optional AppsFlyer setup, GAID and Android dependencies

@@ -1,10 +1,12 @@
 # HApps Mobile Integration
 
-This guide describes the native Android flow in SDK 3.2.0. Existing projects should start with [Mobile Migration: SDK 3.1.2 to 3.2.0](MIGRATION_MOBILE_3.1.2_TO_3.2.0.md). Optional AppsFlyer attribution is implemented by the [separate integration package](../../../Integrations/com.happs.sdk.appsflyer/README.md).
+This guide describes the native Android flow. Projects on `v3.2.0` should start with [Updating from HApps SDK 3.2.0](MIGRATION_FROM_3.2.0.md). Older projects should first read [Mobile Migration: SDK 3.1.2 to 3.2.0](MIGRATION_MOBILE_3.1.2_TO_3.2.0.md). Optional AppsFlyer attribution is implemented by the [separate integration package](../../../Integrations/com.happs.sdk.appsflyer/README.md).
+
+Changes to configuration, cancellation, session events and exceptions are documented in [Updating from HApps SDK 3.2.0](MIGRATION_FROM_3.2.0.md).
 
 ## 1. Requirements and environments
 
-- HApps Unity SDK `3.2.0`.
+- HApps Unity SDK `3.3.0`.
 - Android API 23 or newer.
 - iOS is not supported.
 
@@ -20,9 +22,9 @@ Confirm these values with HApps before integration:
 | Value | Example |
 | --- | --- |
 | Mobile Client ID | `my-game-mobile` |
-| Redirect URI | `com.example.game://auth/callback` |
-| Post Logout Redirect URI | `com.example.game://logout` |
-| Payment Redirect URI | `com.example.game://payment/callback` |
+| Callback URI | `https://links.example.com/games/sample-game/callback` |
+| Android package ID | `com.example.game` |
+| Release signing certificate SHA-256 | `AA:BB:CC:...` |
 | Game API secret | backend only |
 
 For payments, provide HApps with the game backend validation and postback URLs. For updates, HApps must configure `minSupportedVersionCode` and publish at least one release.
@@ -34,31 +36,51 @@ Add the package to `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.2.0"
+    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.3.0",
+    "com.google.external-dependency-manager": "https://github.com/googlesamples/unity-jar-resolver.git?path=upm#v1.2.188"
   }
 }
 ```
 
+Run `Assets > External Dependency Manager > Android Resolver > Force Resolve` after installing or updating the package. The SDK uses AndroidX Browser Custom Tabs for authentication and logout. Payment uses Auth Tab when the browser supports it and falls back to a Custom Tab otherwise.
+
 Add the separate AppsFlyer package only when the game needs install attribution. Its installation and initialization are documented in [HApps AppsFlyer integration](../../../Integrations/com.happs.sdk.appsflyer/README.md).
 
-## 3. Configure Android deep links
+## 3. Configure Android App Links
 
-Merge this filter into the application's launcher activity:
+Ask HApps for the callback domain and game slug assigned in each environment. The callback domain may be the same as `PortalUrl` or a separate domain. Browser return behavior is handled by the SDK Custom Tab and Android App Links; it does not require a separate host.
+
+Send HApps the Android package ID and SHA-256 fingerprint of the certificate that signs the APK. HApps publishes the association at `https://<callback-domain>/.well-known/assetlinks.json`.
+
+DEV and PROD can use different callback domains and associations. Configure a DEV build with its DEV callback domain and debug or DEV signing certificate, and configure a production build with its PROD callback domain and release signing certificate. Each game uses its own `/games/<game-slug>/` path.
+
+Add the `queries` block directly under the root `manifest` element so the SDK can discover Chrome Custom Tabs on Android 11 and newer. Merge the verified HTTPS filter into the application's launcher activity, replacing the example host with the assigned host:
 
 ```xml
+<queries>
+    <intent>
+        <action android:name="android.support.customtabs.action.CustomTabsService" />
+    </intent>
+    <package android:name="com.android.chrome" />
+    <package android:name="com.chrome.beta" />
+    <package android:name="com.chrome.dev" />
+    <package android:name="com.chrome.canary" />
+</queries>
+
 <activity
     android:name="com.unity3d.player.UnityPlayerActivity"
     android:exported="true"
     android:launchMode="singleTask">
 
-    <intent-filter>
+    <intent-filter android:autoVerify="true">
         <action android:name="android.intent.action.VIEW" />
         <category android:name="android.intent.category.DEFAULT" />
         <category android:name="android.intent.category.BROWSABLE" />
 
-        <data android:scheme="com.example.game" android:host="auth" />
-        <data android:scheme="com.example.game" android:host="logout" />
-        <data android:scheme="com.example.game" android:host="payment" />
+        <data
+            android:scheme="https"
+            android:host="links.example.com"
+            android:path="/games/sample-game/callback" />
     </intent-filter>
 </activity>
 ```
@@ -66,12 +88,38 @@ Merge this filter into the application's launcher activity:
 This filter accepts:
 
 ```text
-com.example.game://auth/callback
-com.example.game://logout
-com.example.game://payment/callback
+https://links.example.com/games/sample-game/callback
 ```
 
-The URIs registered with HApps must match exactly. The payment callback only returns the user to the app; it does not confirm payment.
+The association served by HApps has this shape:
+
+```json
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.example.game",
+      "sha256_cert_fingerprints": ["AA:BB:CC:..."]
+    }
+  }
+]
+```
+
+The file must be available over HTTPS without authentication or redirects. The package ID and fingerprint must match the installed APK. The same callback URI is used for authentication, logout and payment. The server identifies the operation with `type=login`, `type=logout`, or `type=payment`. Authentication also adds `code` and `state`, or `error` and `state`; logout adds `state` and `status`; payment adds `orderId` and may add `status`.
+
+Authentication and logout return through the verified App Link. For payment, a supported browser runs an Auth Tab and watches the same callback host and path. When checkout reaches that callback, the Auth Tab closes and returns control to the game before the callback page needs to load. Browsers without Auth Tab support use a Custom Tab fallback. A payment callback only returns the user to the app; it does not confirm payment.
+
+After installing the APK, verify the association on Android 12 or newer:
+
+```bash
+adb shell pm verify-app-links --re-verify com.example.game
+adb shell pm get-app-links com.example.game
+```
+
+The callback domain should report `verified`. If the same APK intentionally supports both DEV and PROD, declare each domain in a separate intent filter and register the package and corresponding signing certificate on both domains.
+
+Test the link by opening it from another application or by resolving it through ADB. Typing or pasting the URL into a browser address bar explicitly asks the browser to open the page and may not launch the application. The SDK opens interactive mobile URLs in an Android Custom Tab and allows verified redirects to leave the browser and return to the game.
 
 ## 4. Configure the SDK
 
@@ -84,10 +132,19 @@ HApps.ConfigureMobile(new HAppsMobileAuthOptions
 {
     PortalUrl = "https://portal.example.com",
     ClientId = "my-game-mobile",
-    RedirectUri = "com.example.game://auth/callback",
-    PostLogoutRedirectUri = "com.example.game://logout"
+    CallbackUri = "https://links.example.com/games/sample-game/callback"
 });
 ```
+
+The SDK sends this exact URI for authentication and logout:
+
+```text
+https://links.example.com/games/sample-game/callback
+```
+
+HApps uses the same URI for the payment return.
+
+`CallbackUri` is independent from `PortalUrl`: API and OIDC requests use `PortalUrl`. Android uses the verified callback association for authentication and logout App Links and for the payment Auth Tab redirect. The callback URI must exactly match the URI registered for the mobile client.
 
 The SDK derives all OIDC and Mobile API paths from `PortalUrl`. Its default credential storage is isolated by `PortalUrl` and `ClientId`.
 
@@ -179,7 +236,7 @@ string publicId = login.PublicId;
 ```
 
 - Only one `LoginAsync()` may run at a time; a second call throws `InvalidOperationException`.
-- The operation throws `TimeoutException` if no callback arrives within 180 seconds.
+- The operation throws `TimeoutException` if the entire login attempt does not complete within 180 seconds.
 - If Android terminates the game while the browser is open, the login cannot be resumed. Start login again after relaunch.
 - Reload the player from the game backend after successful login.
 
@@ -200,7 +257,16 @@ await HApps.Mobile.LogoutAsync();
 MobileSession anonymousSession = await HApps.Mobile.InitSessionAsync();
 ```
 
-Logout revokes the current device session, opens the browser logout URL, and clears local credentials and device keys. Local state is cleared even if the remote request fails. The method does not wait for the final browser callback.
+Logout opens the browser confirmation and waits for the server callback with the matching `state`. On `status=success`, the SDK clears local credentials and device keys. On `status=cancelled`, it preserves the current mobile session and completes the task with `OperationCanceledException`. A failed or timed-out logout does not clear local state.
+
+The SDK uses the shared `CallbackUri` with the following logout confirmation URLs:
+
+```text
+/games/:slug/app/callback?state=...&type=logout&status=success
+/games/:slug/app/callback?state=...&type=logout&status=cancelled
+```
+
+The SDK sends the base `CallbackUri` as `postLogoutRedirectUri`. The server adds the logout state, operation type and result to the final callback URL. Both results use the same Android App Link path; query parameters do not need separate Android manifest entries.
 
 ## 10. Create a payment
 
@@ -230,7 +296,9 @@ MobileCreatePaymentResult payment =
 - use a new value for a new purchase;
 - never reuse it for another player or product.
 
-The SDK creates the order and opens `PaymentUrl`. `OrderId` confirms order creation only; it does not confirm payment.
+The SDK creates the order and opens `PaymentUrl`. On supported browsers, it uses an Auth Tab configured with the host and path from `CallbackUri`. Reaching that callback closes the browser surface and resumes the game; query parameters are allowed and do not require additional manifest filters. Unsupported browsers use a Custom Tab fallback.
+
+`OrderId` confirms order creation only; it does not confirm payment. Returning to the game also does not prove that payment succeeded.
 
 The SDK does not wait for `payment_complete`. Grant the product only after the game backend verifies the HApps postback. Prevent multiple checkout flows from being opened simultaneously.
 

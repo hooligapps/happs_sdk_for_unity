@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using AppsFlyerSDK;
 using UnityEngine;
 using UnityEngine.Scripting;
@@ -17,6 +18,8 @@ namespace HAppsSDK.Attribution
 		private bool _collectAdvertisingIdentifiers;
 		private bool _debugLogging;
 		private bool _started;
+		private bool _shutdown;
+		private CancellationTokenSource _trackingCancellation = new CancellationTokenSource();
 		private bool _startRequested;
 		private bool _flushing;
 		private float _nextPoll;
@@ -40,6 +43,7 @@ namespace HAppsSDK.Attribution
 			DontDestroyOnLoad(go);
 			var adapter = go.AddComponent<HAppsAppsFlyer>();
 			adapter._mobile = mobile;
+			mobile.Disposed += adapter.DisposeAdapter;
 			adapter._scope = scope;
 			adapter._cacheKey = scope + ".appsflyer.attribution.v1";
 			adapter._external = options.UseExistingSdk;
@@ -55,8 +59,48 @@ namespace HAppsSDK.Attribution
 		public static void StartTracking()
 		{
 			var adapter = RequireInstance();
+			if (adapter._trackingCancellation.IsCancellationRequested)
+			{
+				adapter._trackingCancellation.Dispose();
+				adapter._trackingCancellation = new CancellationTokenSource();
+			}
+			if (adapter._started && !adapter._external) AppsFlyer.stopSDK(false);
 			adapter._startRequested = true;
+			adapter._nextFlush = 0;
 			adapter.Poll();
+		}
+
+		public static void StopTracking()
+		{
+			var adapter = RequireInstance();
+			adapter._startRequested = false;
+			adapter._trackingCancellation.Cancel();
+			if (adapter._started && !adapter._external) AppsFlyer.stopSDK(true);
+		}
+
+		public static void Shutdown() => _instance?.DisposeAdapter();
+
+		private void DisposeAdapter()
+		{
+			if (_shutdown) return;
+			_shutdown = true;
+			_startRequested = false;
+			_trackingCancellation.Cancel();
+			if (_mobile != null) _mobile.Disposed -= DisposeAdapter;
+			try
+			{
+				if (_manageCustomerId && !string.IsNullOrEmpty(_installId))
+					AppsFlyer.setCustomerUserId(_installId);
+				if (_started && !_external) AppsFlyer.stopSDK(true);
+			}
+			finally
+			{
+				if (_instance == this) _instance = null;
+				enabled = false;
+				gameObject.name = "HAppsAppsFlyerDisposed";
+				if (Application.isPlaying) Destroy(gameObject);
+				else DestroyImmediate(gameObject);
+			}
 		}
 
 		public static void RecordConversionData(string json)
@@ -80,9 +124,7 @@ namespace HAppsSDK.Attribution
 		{
 			if (_mobile.IsDisposed || _mobile.AttributionStorageScope != _scope)
 			{
-				if (_manageCustomerId && !string.IsNullOrEmpty(_installId))
-					AppsFlyer.setCustomerUserId(_installId);
-				enabled = false;
+				DisposeAdapter();
 				return;
 			}
 			if (!_started)
@@ -115,7 +157,7 @@ namespace HAppsSDK.Attribution
 					AppsFlyer.setCustomerUserId(initialSession.PublicId);
 					_customerId = initialSession.PublicId;
 				}
-				if (!_external) AppsFlyer.startSDK();
+				if (!_external) { AppsFlyer.stopSDK(false); AppsFlyer.startSDK(); }
 				_started = true;
 				_waitingReason = null;
 				LogDebug("AppsFlyer SDK started");
@@ -176,7 +218,7 @@ namespace HAppsSDK.Attribution
 
 		private void ReceiveConversion(string json)
 		{
-			if (_mobile == null || _mobile.IsDisposed || _mobile.AttributionStorageScope != _scope) return;
+			if (_shutdown || _mobile == null || _mobile.IsDisposed || _mobile.AttributionStorageScope != _scope) return;
 			if (string.IsNullOrEmpty(json) || json.Length > 65536) return;
 			if (string.IsNullOrEmpty(_installId)) { _pendingConversion = json; return; }
 			ApplyConversion(json);
@@ -209,10 +251,12 @@ namespace HAppsSDK.Attribution
 			_flushing = true;
 			try
 			{
-				await _mobile.FlushAttributionAsync();
+				await _mobile.FlushAttributionAsync(_trackingCancellation.Token);
+				if (_shutdown || !_startRequested) return;
 				_retryDelay = 2;
 				_nextFlush = Time.realtimeSinceStartup + 30;
 			}
+			catch (OperationCanceledException) { }
 			catch (Exception ex)
 			{
 				Warn(ex);
@@ -246,6 +290,9 @@ namespace HAppsSDK.Attribution
 
 		private void OnDestroy()
 		{
+			if (_mobile != null) _mobile.Disposed -= DisposeAdapter;
+			_trackingCancellation.Cancel();
+			_trackingCancellation.Dispose();
 			if (_instance == this) _instance = null;
 		}
 	}

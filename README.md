@@ -1,6 +1,6 @@
 # HApps Unity SDK
 
-Unity SDK 3.2.0 for HApps WebGL integrations through JS SDK 1.1.0 and native Android integrations. Optional Android attribution is available through the separate [AppsFlyer integration package](Integrations/com.happs.sdk.appsflyer/README.md), which includes the official AppsFlyer Unity SDK 6.18.1.
+Unity SDK 3.3.0 for HApps WebGL integrations through JS SDK 1.1.0 and native Android integrations. Optional Android attribution is available through the separate [AppsFlyer integration package](Integrations/com.happs.sdk.appsflyer/README.md), which includes the official AppsFlyer Unity SDK 6.18.1.
 
 ## Installation
 
@@ -9,7 +9,7 @@ Add the package to your Unity project through `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.2.0"
+    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.3.0"
   }
 }
 ```
@@ -86,6 +86,28 @@ Method semantics:
 - `PlayerPrefsMobileTokenStore` is retained only as an explicitly insecure legacy/dev option.
 - `HApps.Mobile` is the native/mobile branch for portal session bootstrap, OIDC login, and mobile payment creation.
 - `Shutdown()` disposes both WebGL and mobile provider instances. Late mobile results can no longer update SDK state after shutdown.
+
+### `MobileAttributionData`
+
+`HApps.Mobile.CurrentAttribution` returns the latest local attribution snapshot:
+
+| Field | Description |
+| --- | --- |
+| `Provider` | Attribution provider; the optional adapter uses `appsflyer` |
+| `ProviderInstallId` | Provider installation ID |
+| `MediaSource` | Raw provider media source |
+| `Campaign` | Raw provider campaign name |
+| `CampaignId` | Raw provider campaign ID |
+| `HaffPid` | Partner ID mapped from AppsFlyer `media_source` |
+| `UtmCampaign` | Campaign mapped from AppsFlyer `campaign` |
+| `HaffCid` | Click ID mapped from AppsFlyer `af_sub1` |
+| `CustomData` | Original AppsFlyer `custom_data` string |
+| `QueryParams` | `custom_data` JSON without `referrer` and `referer` |
+| `Referer` | Value extracted from `referrer`, or from `referer` when `referrer` is absent |
+| `Status` | `pending`, `organic`, or `non-organic` |
+| `ObservedAt` | Unix timestamp in seconds when attribution was received |
+
+`QueryParams` and `Referer` are available to the game through `CurrentAttribution`. The attribution request continues to send the original `CustomData` value.
 
 ## Choose Your Flow
 
@@ -339,7 +361,7 @@ private void OnDisable()
 
 private void HandleAuthCompleted(UserData user, SignatureData signature)
 {
-    Debug.Log($"auth_complete: {user?.userId}, {signature?.signature}");
+    Debug.Log($"auth_complete: {user?.userId}");
 }
 ```
 
@@ -503,4 +525,4 @@ Expected response shape:
 
 ## Version
 
-HApps Unity SDK - Integration Guide v3.2.0 (JS SDK 1.1.0)
+HApps Unity SDK - Integration Guide v3.3.0 (JS SDK 1.1.0)

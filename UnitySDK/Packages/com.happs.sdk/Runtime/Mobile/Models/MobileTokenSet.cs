@@ -14,5 +14,6 @@ namespace HAppsSDK
 		public string PublicId;
 		public string SocialId;
 		public bool Verified;
+        internal MobileTokenSet Copy() => (MobileTokenSet)MemberwiseClone();
 	}
 }

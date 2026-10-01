@@ -15,6 +15,7 @@ namespace HAppsSDK
 		private const int SessionExpirySkewSeconds = 5;
 		private const int HttpTimeoutSeconds = 30;
 		private const int LoginTimeoutMs = 180000;
+		private const int LogoutTimeoutMs = 180000;
 		private const string TokenStorageKeyPrefix = "happs.mobile.state.v1";
 		private const string AuthorityPath = "/idp/oidc";
 		private const string MobileApiPath = "/api/v1/mobile";
@@ -41,8 +42,10 @@ namespace HAppsSDK
 		private readonly object _sessionTaskSync = new object();
 		private Task<MobileSession> _sessionRefreshTask;
 		private int _sessionRefreshVersion;
-		private TaskCompletionSource<MobileLoginResult> _activeLoginTcs;
+		private CancellationTokenSource _activeLoginCancellation;
+		private readonly CancellationTokenSource _lifetimeCancellation = new CancellationTokenSource();
 		private bool _loginInProgress;
+		private bool _paymentInProgress;
 		private bool _disposed;
 		private int _stateVersion;
 		private string _analyticProvider;
@@ -52,7 +55,9 @@ namespace HAppsSDK
 		private string _sentAttributionPayload;
 		private string _sentAttributionDeviceId;
 
-		public MobileSession CurrentSession => _currentSession;
+		public MobileSession CurrentSession => _currentSession?.Copy();
+		public event Action<MobileSession, MobileSession> SessionChanged;
+		public event Action Disposed;
 		public MobileAttributionData CurrentAttribution => _attribution?.Copy();
 		public bool IsDisposed => _disposed;
 		public string AttributionStorageScope
@@ -79,10 +84,12 @@ namespace HAppsSDK
 			return FlushAttributionAsync();
 		}
 
-		public Task FlushAttributionAsync()
+		public Task FlushAttributionAsync() => FlushAttributionAsync(CancellationToken.None);
+
+		public Task FlushAttributionAsync(CancellationToken cancellationToken)
 		{
 			EnsureConfigured();
-			var stateVersion = CaptureStateVersion();
+			var stateVersion = CaptureStateVersion(cancellationToken);
 			return RunSessionExclusiveAsync(stateVersion, async () =>
 			{
 				if (_currentSession == null || _attribution == null || _attribution.Status == "pending")
@@ -98,14 +105,14 @@ namespace HAppsSDK
 				try
 				{
 					responseText = await SendAuthorizedJsonPostAsync(
-						BuildPortalUrl(AttributionPath), session.AccessToken, json, HttpTimeoutSeconds);
+						BuildPortalUrl(AttributionPath), session.AccessToken, json, HttpTimeoutSeconds, stateVersion.CancellationToken);
 				}
-				catch (MobileApiException ex) when (IsRecoverableSessionError(ex))
+				catch (HAppsMobileException ex) when (IsRecoverableSessionError(ex))
 				{
 					session = await InitSessionInternalAsync(forceRefresh: true, stateVersion);
 					deviceId = session.DeviceId;
 					responseText = await SendAuthorizedJsonPostAsync(
-						BuildPortalUrl(AttributionPath), session.AccessToken, json, HttpTimeoutSeconds);
+						BuildPortalUrl(AttributionPath), session.AccessToken, json, HttpTimeoutSeconds, stateVersion.CancellationToken);
 				}
 				var response = JsonUtility.FromJson<AttributionResponse>(responseText);
 				ThrowIfStateInvalid(stateVersion);
@@ -121,16 +128,14 @@ namespace HAppsSDK
 		{
 			ThrowIfDisposed();
 			if (options == null) throw new ArgumentNullException(nameof(options));
-			if (_options != null && BuildTokenStorageKey(_options) != BuildTokenStorageKey(options))
+			if (_options != null)
+				throw new InvalidOperationException("Mobile is already configured. Call HApps.Shutdown() before configuring a new provider.");
+			_options = new HAppsMobileAuthOptions
 			{
-				_analyticProvider = null;
-				_analyticKey = null;
-				_attribution = null;
-				_attributionPayload = null;
-				_sentAttributionPayload = null;
-				_sentAttributionDeviceId = null;
-			}
-			_options = options ?? throw new ArgumentNullException(nameof(options));
+				PortalUrl = options.PortalUrl,
+				ClientId = options.ClientId,
+				CallbackUri = options.CallbackUri
+			};
 			_tokenStore = tokenStore ?? CreateDefaultTokenStore(BuildTokenStorageKey(_options));
 			HAppsLog.Log("Mobile configured");
 		}
@@ -162,90 +167,100 @@ namespace HAppsSDK
 		public Task<MobileSession> InitializeAsync()
 			=> InitSessionAsync();
 
-		public Task<MobileSession> InitSessionAsync()
+		public Task<MobileSession> InitSessionAsync() => InitSessionAsync(CancellationToken.None);
+		public async Task<MobileSession> InitSessionAsync(CancellationToken cancellationToken)
 		{
 			EnsureConfigured();
-			var stateVersion = CaptureStateVersion();
-			return RefreshSessionSingleFlightAsync(stateVersion);
+			cancellationToken.ThrowIfCancellationRequested();
+			var session = await HAppsAsync.WaitAsync(RefreshSessionSingleFlightAsync(CaptureStateVersion()), cancellationToken);
+			return session.Copy();
 		}
 
-		public Task<MobileSession> RefreshSessionAsync()
-		{
-			EnsureConfigured();
-			var stateVersion = CaptureStateVersion();
-			return RefreshSessionSingleFlightAsync(stateVersion);
-		}
+		public Task<MobileSession> RefreshSessionAsync() => InitSessionAsync();
+		public Task<MobileSession> RefreshSessionAsync(CancellationToken cancellationToken) => InitSessionAsync(cancellationToken);
 
-		public async Task<MobileLoginResult> LoginAsync()
+		public Task<MobileLoginResult> LoginAsync() => LoginAsync(CancellationToken.None);
+		public async Task<MobileLoginResult> LoginAsync(CancellationToken cancellationToken)
 		{
 			EnsureConfigured();
 			EnsureOidcConfigured();
-			var stateVersion = BeginLogin();
+			cancellationToken.ThrowIfCancellationRequested();
+			using var timeout = new CancellationTokenSource(LoginTimeoutMs);
+			using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(
+				cancellationToken, timeout.Token, _lifetimeCancellation.Token);
+			var stateVersion = BeginLogin(cancellation);
 			Action<string> onDeepLink = null;
-			TaskCompletionSource<MobileLoginResult> loginTcs = null;
 			try
 			{
 				EnsureDeepLinkListener();
-				var deviceState = await RunSessionExclusiveAsync(
-					stateVersion,
+				var deviceState = await RunSessionExclusiveAsync(stateVersion,
 					() => EnsureDeviceRegisteredAsync(stateVersion));
 				await GetDiscoveryAsync(stateVersion);
-				ThrowIfStateInvalid(stateVersion);
-
 				var codeVerifier = CreateCodeVerifier();
-				var codeChallenge = CreateCodeChallenge(codeVerifier);
-				var startResponse = await RunSessionExclusiveAsync(
-					stateVersion,
-					() => StartOidcAsync(deviceState.DeviceId, codeChallenge, stateVersion));
+				var start = await RunSessionExclusiveAsync(stateVersion,
+					() => StartOidcAsync(deviceState.DeviceId, CreateCodeChallenge(codeVerifier), stateVersion));
 				ThrowIfStateInvalid(stateVersion);
-
-				loginTcs = new TaskCompletionSource<MobileLoginResult>(TaskCreationOptions.RunContinuationsAsynchronously);
-				lock (_lifecycleSync)
+				_pendingLoginState = start.state;
+				var callback = new MobileLoginCallback(GetCallbackUri(), start.state);
+				onDeepLink = url =>
 				{
-					ThrowIfStateInvalid(stateVersion);
-					_activeLoginTcs = loginTcs;
-					_pendingLoginState = startResponse.state;
-				}
-
-				onDeepLink = url => HandleLoginDeepLink(
-					url,
-					startResponse.state,
-					codeVerifier,
-					stateVersion,
-					loginTcs);
+					if (cancellation.IsCancellationRequested || callback.Task.IsCompleted) return;
+					callback.TryAccept(url);
+				};
 				_deepLinkListener.DeepLinkReceived += onDeepLink;
-
-				using var timeoutCts = new CancellationTokenSource(LoginTimeoutMs);
-				using var timeoutReg = timeoutCts.Token.Register(() =>
-				{
-					loginTcs.TrySetException(new TimeoutException("Mobile login timed out while waiting for the redirect callback."));
-				});
-
-				HAppsLog.Log("Opening mobile auth URL");
-				Application.OpenURL(startResponse.authorizationUrl);
-				var result = await loginTcs.Task;
+				HAppsAndroidBrowser.Open(start.authorizationUrl);
+				var url = await HAppsAsync.WaitAsync(callback.Task, cancellation.Token);
 				ThrowIfStateInvalid(stateVersion);
-				HAppsLog.Log($"Mobile login completed: success={result.IsSuccess}");
-				return result;
+				var query = ParseQuery(url);
+				if (query.TryGetValue("error", out var error))
+					return new MobileLoginResult { Error = error };
+				if (!query.TryGetValue("code", out var code) || string.IsNullOrWhiteSpace(code))
+					throw new InvalidOperationException("OIDC redirect does not contain authorization code.");
+				return await CompleteLoginAsync(code, start.state, codeVerifier, stateVersion);
+			}
+			catch (OperationCanceledException) when (timeout.IsCancellationRequested && !cancellationToken.IsCancellationRequested && !_disposed)
+			{
+				throw new TimeoutException("Mobile login timed out.");
 			}
 			finally
 			{
 				if (_deepLinkListener != null && onDeepLink != null)
 					_deepLinkListener.DeepLinkReceived -= onDeepLink;
-
-				EndLogin(loginTcs);
+				EndLogin(cancellation);
 			}
 		}
 
-		public async Task LogoutAsync()
+		internal static bool TryGetLoginCallback(string url, string redirectUri, string state, out string accepted)
+		{
+			accepted = null;
+			if (!MatchesRedirectUri(url, redirectUri)) return false;
+			try
+			{
+				var query = ParseQuery(url);
+				if (!query.TryGetValue("state", out var returnedState) || returnedState != state) return false;
+				accepted = url;
+				return true;
+			}
+			catch (UriFormatException) { return false; }
+		}
+
+		public Task LogoutAsync() => LogoutAsync(CancellationToken.None);
+
+		public async Task LogoutAsync(CancellationToken cancellationToken)
 		{
 			EnsureConfigured();
-			await _sessionGate.WaitAsync();
+			EnsureOidcConfigured();
+			cancellationToken.ThrowIfCancellationRequested();
+			_activeLoginCancellation?.Cancel();
+			using var timeout = new CancellationTokenSource(LogoutTimeoutMs);
+			using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(
+				cancellationToken, timeout.Token, _lifetimeCancellation.Token);
+			await _sessionGate.WaitAsync(cancellation.Token);
+			Action<string> onDeepLink = null;
 
 			try
 			{
-				var stateVersion = BeginStateReset("Mobile login was cancelled by logout.");
-				ThrowIfStateInvalid(stateVersion);
+				var stateVersion = BeginStateReset(cancellation.Token);
 				var tokenSet = await _tokenStore.LoadAsync();
 				if (tokenSet == null || string.IsNullOrWhiteSpace(tokenSet.DeviceId))
 				{
@@ -259,53 +274,88 @@ namespace HAppsSDK
 					return;
 				}
 
-				await ExecuteRemoteLogoutAndClearLocalStateAsync(async () =>
+				var logoutRedirectUri = GetCallbackUri();
+				var proof = CreateProofAsync(
+					"oidc-logout",
+					tokenSet,
+					HashHex(tokenSet.IdToken),
+					HashHex(logoutRedirectUri));
+
+				var request = new OidcLogoutRequest
 				{
-					var proof = CreateProofAsync(
-						"oidc-logout",
-						tokenSet,
-						HashHex(tokenSet.IdToken),
-						HashHex(_options.PostLogoutRedirectUri));
+					clientId = _options.ClientId,
+					deviceId = tokenSet.DeviceId,
+					idToken = tokenSet.IdToken,
+					postLogoutRedirectUri = logoutRedirectUri,
+					timestamp = proof.Timestamp,
+					nonce = proof.Nonce,
+					signature = proof.Signature
+				};
 
-					var request = new OidcLogoutRequest
-					{
-						clientId = _options.ClientId,
-						deviceId = tokenSet.DeviceId,
-						idToken = tokenSet.IdToken,
-						postLogoutRedirectUri = _options.PostLogoutRedirectUri,
-						timestamp = proof.Timestamp,
-						nonce = proof.Nonce,
-						signature = proof.Signature
-					};
+				var response = await SendJsonPostAsync<OidcLogoutRequest, OidcLogoutResponse>(
+					BuildPortalUrl(OidcLogoutPath),
+					request,
+					HttpTimeoutSeconds, stateVersion.CancellationToken);
+				if (response == null || string.IsNullOrWhiteSpace(response.logoutUrl) || string.IsNullOrWhiteSpace(response.state))
+					throw new InvalidOperationException("OIDC logout response is invalid.");
 
-					var response = await SendJsonPostAsync<OidcLogoutRequest, OidcLogoutResponse>(
-						BuildPortalUrl(OidcLogoutPath),
-						request,
-						HttpTimeoutSeconds);
-					if (response == null || string.IsNullOrWhiteSpace(response.logoutUrl))
-						throw new InvalidOperationException("OIDC logout response is invalid.");
+				EnsureDeepLinkListener();
+				var callback = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+				onDeepLink = url =>
+				{
+					if (cancellation.IsCancellationRequested || callback.Task.IsCompleted) return;
+					if (TryGetLogoutCallback(url, logoutRedirectUri, response.state, out var status))
+						callback.TrySetResult(status);
+				};
+				_deepLinkListener.DeepLinkReceived += onDeepLink;
 
-					ThrowIfStateInvalid(stateVersion);
-					HAppsLog.Log("Opening mobile logout URL");
-					Application.OpenURL(response.logoutUrl);
-				});
+				ThrowIfStateInvalid(stateVersion);
+				HAppsLog.Log("Opening mobile logout URL");
+				HAppsAndroidBrowser.Open(response.logoutUrl);
+				var logoutStatus = await HAppsAsync.WaitAsync(callback.Task, cancellation.Token);
+				ThrowIfStateInvalid(stateVersion);
+
+				if (logoutStatus == "success")
+				{
+					await ClearLocalStateAsync();
+					HAppsLog.Log("Mobile logout completed");
+				}
+				else
+				{
+					HAppsLog.Log("Mobile logout cancelled");
+					throw new OperationCanceledException("Mobile logout was cancelled.");
+				}
+			}
+			catch (OperationCanceledException) when (timeout.IsCancellationRequested && !cancellationToken.IsCancellationRequested && !_disposed)
+			{
+				throw new TimeoutException("Mobile logout timed out.");
 			}
 			finally
 			{
+				if (_deepLinkListener != null && onDeepLink != null)
+					_deepLinkListener.DeepLinkReceived -= onDeepLink;
 				_sessionGate.Release();
 			}
 		}
 
-		private async Task ExecuteRemoteLogoutAndClearLocalStateAsync(Func<Task> remoteLogout)
+		internal static bool TryGetLogoutCallback(
+			string url,
+			string redirectUri,
+			string state,
+			out string status)
 		{
+			status = null;
+			if (!MatchesRedirectUri(url, redirectUri)) return false;
 			try
 			{
-				await remoteLogout();
+				var query = ParseQuery(url);
+				if (!query.TryGetValue("state", out var returnedState) || returnedState != state) return false;
+				if (!query.TryGetValue("type", out var type) || type != "logout") return false;
+				if (!query.TryGetValue("status", out var result) || (result != "success" && result != "cancelled")) return false;
+				status = result;
+				return true;
 			}
-			finally
-			{
-				await ClearLocalStateAsync();
-			}
+			catch (UriFormatException) { return false; }
 		}
 
 		public override Task<UserData> GetProfile()
@@ -318,36 +368,47 @@ namespace HAppsSDK
 			throw new NotSupportedException("Mobile payment flow is not implemented via MakePayment. Use CreatePaymentAsync.");
 		}
 
-		public async Task<MobileCreatePaymentResult> CreatePaymentAsync(MobileCreatePaymentRequest request)
+		public Task<MobileCreatePaymentResult> CreatePaymentAsync(MobileCreatePaymentRequest request) => CreatePaymentAsync(request, CancellationToken.None);
+
+		public async Task<MobileCreatePaymentResult> CreatePaymentAsync(MobileCreatePaymentRequest request, CancellationToken cancellationToken)
 		{
 			EnsureConfigured();
 			if (request == null)
 				throw new ArgumentNullException(nameof(request));
 
-			var stateVersion = CaptureStateVersion();
-			var accessToken = await RunSessionExclusiveAsync(
-				stateVersion,
-				async () => (await EnsureActiveSessionInternalAsync(stateVersion)).AccessToken);
-
+			request = request.ValidatedCopy();
+			var stateVersion = CaptureStateVersion(cancellationToken);
+			if (_paymentInProgress) throw new InvalidOperationException("Mobile payment creation is already running.");
+			_paymentInProgress = true;
 			try
 			{
-				return await CreatePaymentInternalAsync(request, accessToken, stateVersion);
+				var accessToken = await RunSessionExclusiveAsync(
+					stateVersion,
+					async () => (await EnsureActiveSessionInternalAsync(stateVersion)).AccessToken);
+
+				try
+				{
+					return await CreatePaymentInternalAsync(request, accessToken, stateVersion);
+				}
+				catch (HAppsMobileException ex) when (IsRecoverableSessionError(ex))
+				{
+					HAppsLog.Warn($"Create payment requires session recovery. statusCode={ex.StatusCode}");
+					accessToken = (await RefreshSessionSingleFlightAsync(stateVersion)).AccessToken;
+					return await CreatePaymentInternalAsync(request, accessToken, stateVersion);
+				}
 			}
-			catch (MobileApiException ex) when (IsRecoverableSessionError(ex))
-			{
-				HAppsLog.Warn($"Create payment requires session recovery. statusCode={ex.StatusCode}");
-				accessToken = (await RefreshSessionSingleFlightAsync(stateVersion)).AccessToken;
-				return await CreatePaymentInternalAsync(request, accessToken, stateVersion);
-			}
+			finally { _paymentInProgress = false; }
 		}
 
-		public async Task<MobileCheckUpdateResult> CheckForUpdateAsync(int versionCode)
+		public Task<MobileCheckUpdateResult> CheckForUpdateAsync(int versionCode) => CheckForUpdateAsync(versionCode, CancellationToken.None);
+
+		public async Task<MobileCheckUpdateResult> CheckForUpdateAsync(int versionCode, CancellationToken cancellationToken)
 		{
 			EnsureUpdateCheckConfigured();
 			if (versionCode <= 0)
 				throw new ArgumentOutOfRangeException(nameof(versionCode), "Android version code must be greater than zero.");
 
-			var stateVersion = CaptureStateVersion();
+			var stateVersion = CaptureStateVersion(cancellationToken);
 			var response = await SendJsonPostAsync<CheckUpdateRequest, CheckUpdateResponse>(
 				BuildPortalUrl(CheckUpdatePath),
 				new CheckUpdateRequest
@@ -355,7 +416,7 @@ namespace HAppsSDK
 					clientId = _options.ClientId,
 					versionCode = versionCode
 				},
-				HttpTimeoutSeconds);
+				HttpTimeoutSeconds, stateVersion.CancellationToken);
 			ThrowIfStateInvalid(stateVersion);
 
 			if (response == null)
@@ -384,7 +445,7 @@ namespace HAppsSDK
 
 		public override void Dispose()
 		{
-			TaskCompletionSource<MobileLoginResult> loginTcs;
+			CancellationTokenSource loginCancellation;
 			lock (_lifecycleSync)
 			{
 				if (_disposed)
@@ -392,12 +453,19 @@ namespace HAppsSDK
 
 				_disposed = true;
 				Interlocked.Increment(ref _stateVersion);
-				loginTcs = _activeLoginTcs;
-				_activeLoginTcs = null;
+				loginCancellation = _activeLoginCancellation;
+				_activeLoginCancellation = null;
 				_pendingLoginState = null;
 			}
 
-			loginTcs?.TrySetException(new ObjectDisposedException(nameof(HAppsMobileProvider)));
+			loginCancellation?.Cancel();
+			_lifetimeCancellation.Cancel();
+			if (Disposed != null)
+				foreach (Action handler in Disposed.GetInvocationList())
+					try { handler(); }
+					catch (Exception ex) { HAppsLog.Error("Dispose subscriber failed: " + ex.GetType().Name); }
+			Disposed = null;
+			SessionChanged = null;
 
 			if (_deepLinkListener != null)
 				_deepLinkListener.DeepLinkReceived -= HandleStrayDeepLink;
@@ -465,52 +533,58 @@ namespace HAppsSDK
 			return $"{_options.PortalUrl.Trim().TrimEnd('/')}{path}";
 		}
 
-		private int CaptureStateVersion()
+		private OperationContext CaptureStateVersion(CancellationToken cancellationToken = default)
 		{
 			ThrowIfDisposed();
-			return Volatile.Read(ref _stateVersion);
+			cancellationToken.ThrowIfCancellationRequested();
+			return new OperationContext(Volatile.Read(ref _stateVersion), cancellationToken);
 		}
 
-		private int BeginLogin()
+		private OperationContext BeginLogin(CancellationTokenSource cancellation)
 		{
 			lock (_lifecycleSync)
 			{
 				ThrowIfDisposed();
-				if (_loginInProgress)
-					throw new InvalidOperationException("Mobile login is already in progress.");
-
+				if (_loginInProgress) throw new InvalidOperationException("Mobile login is already in progress.");
+				var context = CaptureStateVersion(cancellation.Token);
 				_loginInProgress = true;
-				return _stateVersion;
+				_activeLoginCancellation = cancellation;
+				return context;
 			}
 		}
 
-		private void EndLogin(TaskCompletionSource<MobileLoginResult> loginTcs)
+		private void EndLogin(CancellationTokenSource cancellation)
 		{
 			lock (_lifecycleSync)
 			{
-				if (ReferenceEquals(_activeLoginTcs, loginTcs))
-					_activeLoginTcs = null;
-
+				if (!ReferenceEquals(_activeLoginCancellation, cancellation)) return;
+				_activeLoginCancellation = null;
 				_pendingLoginState = null;
 				_loginInProgress = false;
 			}
 		}
 
-		private int BeginStateReset(string loginCancellationMessage)
+		private OperationContext BeginStateReset(CancellationToken cancellationToken)
 		{
-			TaskCompletionSource<MobileLoginResult> loginTcs;
-			int stateVersion;
 			lock (_lifecycleSync)
 			{
 				ThrowIfDisposed();
-				stateVersion = Interlocked.Increment(ref _stateVersion);
-				loginTcs = _activeLoginTcs;
-				_activeLoginTcs = null;
+				Interlocked.Increment(ref _stateVersion);
+				_activeLoginCancellation?.Cancel();
 				_pendingLoginState = null;
+				return CaptureStateVersion(cancellationToken);
 			}
+		}
 
-			loginTcs?.TrySetException(new OperationCanceledException(loginCancellationMessage));
-			return stateVersion;
+		private readonly struct OperationContext
+		{
+			public readonly int Version;
+			public readonly CancellationToken CancellationToken;
+			public OperationContext(int version, CancellationToken cancellationToken)
+			{
+				Version = version;
+				CancellationToken = cancellationToken;
+			}
 		}
 
 		private void ThrowIfDisposed()
@@ -519,16 +593,17 @@ namespace HAppsSDK
 				throw new ObjectDisposedException(nameof(HAppsMobileProvider));
 		}
 
-		private void ThrowIfStateInvalid(int stateVersion)
+		private void ThrowIfStateInvalid(OperationContext stateVersion)
 		{
 			ThrowIfDisposed();
-			if (stateVersion != Volatile.Read(ref _stateVersion))
+			stateVersion.CancellationToken.ThrowIfCancellationRequested();
+			if (stateVersion.Version != Volatile.Read(ref _stateVersion))
 				throw new OperationCanceledException("Mobile state changed while the operation was running.");
 		}
 
-		private async Task<T> RunSessionExclusiveAsync<T>(int stateVersion, Func<Task<T>> action)
+		private async Task<T> RunSessionExclusiveAsync<T>(OperationContext stateVersion, Func<Task<T>> action)
 		{
-			await _sessionGate.WaitAsync();
+			await _sessionGate.WaitAsync(stateVersion.CancellationToken);
 			try
 			{
 				ThrowIfStateInvalid(stateVersion);
@@ -542,21 +617,25 @@ namespace HAppsSDK
 			}
 		}
 
-		private Task<MobileSession> RefreshSessionSingleFlightAsync(int stateVersion)
+		private Task<MobileSession> RefreshSessionSingleFlightAsync(OperationContext stateVersion)
 		{
+			ThrowIfStateInvalid(stateVersion);
+			Task<MobileSession> task;
 			lock (_sessionTaskSync)
 			{
-				if (_sessionRefreshTask != null && _sessionRefreshVersion == stateVersion)
-					return _sessionRefreshTask;
-
-				_sessionRefreshVersion = stateVersion;
-				var refreshTask = RunSessionExclusiveAsync(
-					stateVersion,
-					() => InitSessionInternalAsync(forceRefresh: true, stateVersion));
-				_sessionRefreshTask = refreshTask;
-				ObserveSessionRefreshCompletion(refreshTask);
-				return refreshTask;
+				if (_sessionRefreshTask == null || _sessionRefreshVersion != stateVersion.Version)
+				{
+					_sessionRefreshVersion = stateVersion.Version;
+					var shared = new OperationContext(stateVersion.Version, CancellationToken.None);
+					_sessionRefreshTask = RunSessionExclusiveAsync(shared,
+						() => InitSessionInternalAsync(forceRefresh: true, shared));
+					task = _sessionRefreshTask;
+					ObserveSessionRefreshCompletion(task);
+				}
+				else task = _sessionRefreshTask;
 			}
+			return stateVersion.CancellationToken.CanBeCanceled
+				? HAppsAsync.WaitAsync(task, stateVersion.CancellationToken) : task;
 		}
 
 		private void ObserveSessionRefreshCompletion(Task<MobileSession> task)
@@ -572,9 +651,9 @@ namespace HAppsSDK
 			}, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
 		}
 
-		private async Task RunSessionExclusiveAsync(int stateVersion, Func<Task> action)
+		private async Task RunSessionExclusiveAsync(OperationContext stateVersion, Func<Task> action)
 		{
-			await _sessionGate.WaitAsync();
+			await _sessionGate.WaitAsync(stateVersion.CancellationToken);
 			try
 			{
 				ThrowIfStateInvalid(stateVersion);
@@ -589,13 +668,23 @@ namespace HAppsSDK
 
 		private void EnsureOidcConfigured()
 		{
-			if (string.IsNullOrWhiteSpace(_options.RedirectUri))
-				throw new InvalidOperationException("Mobile auth RedirectUri is not configured.");
-			if (string.IsNullOrWhiteSpace(_options.PostLogoutRedirectUri))
-				throw new InvalidOperationException("Mobile PostLogoutRedirectUri is not configured.");
+			if (string.IsNullOrWhiteSpace(_options.CallbackUri))
+				throw new InvalidOperationException("Mobile CallbackUri is not configured.");
+
+			if (!Uri.TryCreate(_options.CallbackUri.Trim(), UriKind.Absolute, out var callbackUri) ||
+				!string.IsNullOrEmpty(callbackUri.Query) ||
+				!string.IsNullOrEmpty(callbackUri.Fragment))
+			{
+				throw new InvalidOperationException("Mobile CallbackUri must be an absolute URI without a query or fragment.");
+			}
 		}
 
-		private async Task<MobileSession> EnsureActiveSessionInternalAsync(int stateVersion)
+		private string GetCallbackUri()
+		{
+			return _options.CallbackUri.Trim();
+		}
+
+		private async Task<MobileSession> EnsureActiveSessionInternalAsync(OperationContext stateVersion)
 		{
 			ThrowIfStateInvalid(stateVersion);
 			if (_currentSession != null && !IsExpired(_currentSession.AccessTokenExpiresAtUtc) && !string.IsNullOrWhiteSpace(_currentSession.AccessToken))
@@ -612,7 +701,7 @@ namespace HAppsSDK
 		private async Task<MobileCreatePaymentResult> CreatePaymentInternalAsync(
 			MobileCreatePaymentRequest request,
 			string accessToken,
-			int stateVersion)
+			OperationContext stateVersion)
 		{
 			var payload = new CreatePaymentPayload
 			{
@@ -629,14 +718,14 @@ namespace HAppsSDK
 				BuildPortalUrl(CreatePaymentPath),
 				accessToken,
 				json,
-				HttpTimeoutSeconds);
+				HttpTimeoutSeconds, stateVersion.CancellationToken);
 			ThrowIfStateInvalid(stateVersion);
 			var response = JsonUtility.FromJson<CreatePaymentResponse>(responseText);
 			if (response == null || string.IsNullOrWhiteSpace(response.orderId) || string.IsNullOrWhiteSpace(response.paymentUrl))
 				throw new InvalidOperationException("Create payment response is invalid.");
 
 			HAppsLog.Log("Mobile payment created");
-			Application.OpenURL(response.paymentUrl);
+			HAppsAndroidBrowser.OpenAndCloseOnRedirect(response.paymentUrl, GetCallbackUri());
 
 			return new MobileCreatePaymentResult
 			{
@@ -645,19 +734,12 @@ namespace HAppsSDK
 			};
 		}
 
-		private static bool IsRecoverableSessionError(MobileApiException ex)
+		private static bool IsRecoverableSessionError(HAppsMobileException ex)
 		{
-			if (ex.StatusCode != 401)
-				return false;
-
-			return ContainsCode(ex.ResponseBody, "invalid_mobile_session")
-				|| ContainsCode(ex.ResponseBody, "mobile_session_expired");
-		}
-
-		private static bool ContainsCode(string body, string code)
-		{
-			return !string.IsNullOrWhiteSpace(body)
-				&& body.IndexOf(code, StringComparison.OrdinalIgnoreCase) >= 0;
+			// Preserve recovery for the existing server error envelopes as well as typed codes.
+			return ex.StatusCode == 401 &&
+				(ex.ResponseBody.IndexOf("invalid_mobile_session", StringComparison.OrdinalIgnoreCase) >= 0 ||
+				 ex.ResponseBody.IndexOf("mobile_session_expired", StringComparison.OrdinalIgnoreCase) >= 0);
 		}
 
 		private void EnsureDeepLinkListener()
@@ -685,7 +767,7 @@ namespace HAppsSDK
 			HAppsLog.Log("Pending mobile auth state is active; deep link received");
 		}
 
-		private async Task<OidcDiscoveryDocument> GetDiscoveryAsync(int stateVersion)
+		private async Task<OidcDiscoveryDocument> GetDiscoveryAsync(OperationContext stateVersion)
 		{
 			ThrowIfStateInvalid(stateVersion);
 			if (_discovery != null)
@@ -694,7 +776,7 @@ namespace HAppsSDK
 			var authority = BuildPortalUrl(AuthorityPath);
 			var url = $"{authority}/.well-known/openid-configuration";
 			HAppsLog.Log("Loading OIDC discovery");
-			var json = await SendGetAsync(url, HttpTimeoutSeconds);
+			var json = await SendGetAsync(url, HttpTimeoutSeconds, stateVersion.CancellationToken);
 			ThrowIfStateInvalid(stateVersion);
 			var discovery = JsonUtility.FromJson<OidcDiscoveryDocument>(json);
 
@@ -705,7 +787,7 @@ namespace HAppsSDK
 			return discovery;
 		}
 
-		private async Task<MobileSession> InitSessionInternalAsync(bool forceRefresh, int stateVersion)
+		private async Task<MobileSession> InitSessionInternalAsync(bool forceRefresh, OperationContext stateVersion, OidcTokenResponse loginTokens = null)
 		{
 			ThrowIfStateInvalid(stateVersion);
 			var tokenSet = await EnsureDeviceRegisteredAsync(stateVersion);
@@ -724,18 +806,24 @@ namespace HAppsSDK
 			var response = await SendJsonPostAsync<InitSessionRequest, InitSessionResponse>(
 				BuildPortalUrl(InitSessionPath),
 				payload,
-				HttpTimeoutSeconds);
+				HttpTimeoutSeconds, stateVersion.CancellationToken);
 			ThrowIfStateInvalid(stateVersion);
 			if (response == null || string.IsNullOrWhiteSpace(response.accessToken) || string.IsNullOrWhiteSpace(response.publicId))
 				throw new InvalidOperationException("Portal initSession response is invalid.");
 
+			if (loginTokens != null)
+			{
+				tokenSet.IdToken = loginTokens.id_token;
+				tokenSet.OidcAccessToken = loginTokens.access_token;
+				tokenSet.SocialId = ExtractSubjectFromJwt(loginTokens.id_token);
+			}
 			return await ApplySessionResponseAsync(tokenSet, response, stateVersion);
 		}
 
-		private async Task<MobileTokenSet> EnsureDeviceRegisteredAsync(int stateVersion)
+		private async Task<MobileTokenSet> EnsureDeviceRegisteredAsync(OperationContext stateVersion)
 		{
 			ThrowIfStateInvalid(stateVersion);
-			var tokenSet = await _tokenStore.LoadAsync() ?? new MobileTokenSet();
+			var tokenSet = (await _tokenStore.LoadAsync())?.Copy() ?? new MobileTokenSet();
 			ThrowIfStateInvalid(stateVersion);
 			EnsureDeviceKeyMaterial(tokenSet);
 
@@ -762,7 +850,7 @@ namespace HAppsSDK
 			var response = await SendJsonPostAsync<RegisterDeviceRequest, RegisterDeviceResponse>(
 				BuildPortalUrl(DeviceRegisterPath),
 				request,
-				HttpTimeoutSeconds);
+				HttpTimeoutSeconds, stateVersion.CancellationToken);
 			ThrowIfStateInvalid(stateVersion);
 			if (response == null || string.IsNullOrWhiteSpace(response.deviceId))
 				throw new InvalidOperationException("Device register response is invalid.");
@@ -774,22 +862,23 @@ namespace HAppsSDK
 			return tokenSet;
 		}
 
-		private async Task<OidcStartResponse> StartOidcAsync(string deviceId, string codeChallenge, int stateVersion)
+		private async Task<OidcStartResponse> StartOidcAsync(string deviceId, string codeChallenge, OperationContext stateVersion)
 		{
 			ThrowIfStateInvalid(stateVersion);
 			var tokenSet = await _tokenStore.LoadAsync();
 			ThrowIfStateInvalid(stateVersion);
+			var redirectUri = GetCallbackUri();
 			var proof = CreateProofAsync(
 				"oidc-start",
 				tokenSet,
-				HashHex(_options.RedirectUri),
+				HashHex(redirectUri),
 				codeChallenge);
 
 			var request = new OidcStartRequest
 			{
 				clientId = _options.ClientId,
 				deviceId = deviceId,
-				redirectUri = _options.RedirectUri,
+				redirectUri = redirectUri,
 				codeChallenge = codeChallenge,
 				timestamp = proof.Timestamp,
 				nonce = proof.Nonce,
@@ -800,7 +889,7 @@ namespace HAppsSDK
 			var response = await SendJsonPostAsync<OidcStartRequest, OidcStartResponse>(
 				BuildPortalUrl(OidcStartPath),
 				request,
-				HttpTimeoutSeconds);
+				HttpTimeoutSeconds, stateVersion.CancellationToken);
 			ThrowIfStateInvalid(stateVersion);
 			if (response == null || string.IsNullOrWhiteSpace(response.authorizationUrl) || string.IsNullOrWhiteSpace(response.state))
 				throw new InvalidOperationException("OIDC start response is invalid.");
@@ -808,112 +897,53 @@ namespace HAppsSDK
 			return response;
 		}
 
-		private async void HandleLoginDeepLink(
-			string url,
-			string expectedState,
-			string codeVerifier,
-			int stateVersion,
-			TaskCompletionSource<MobileLoginResult> loginTcs)
+		private async Task<MobileLoginResult> CompleteLoginAsync(string code, string expectedState,
+			string codeVerifier, OperationContext stateVersion)
 		{
-			if (loginTcs.Task.IsCompleted)
-				return;
+			ThrowIfStateInvalid(stateVersion);
+			var discovery = await GetDiscoveryAsync(stateVersion);
+			var redirectUri = GetCallbackUri();
+			var oidcTokens = await ExchangeCodeAsync(
+				discovery.token_endpoint,
+				_options.ClientId,
+				code,
+				redirectUri,
+				codeVerifier,
+				HttpTimeoutSeconds, stateVersion.CancellationToken);
+			ThrowIfStateInvalid(stateVersion);
 
-			try
+			if (string.IsNullOrWhiteSpace(oidcTokens.id_token))
+				throw new InvalidOperationException("Token exchange response does not contain id_token.");
+
+			var socialId = ExtractSubjectFromJwt(oidcTokens.id_token);
+			var result = await RunSessionExclusiveAsync(stateVersion, async () =>
 			{
-				ThrowIfStateInvalid(stateVersion);
-				HAppsLog.Log("Handling mobile deep link");
-
-				if (!MatchesRedirectUri(url, _options.RedirectUri))
+				await ExchangeOidcAsync(expectedState, oidcTokens.id_token, stateVersion);
+				var session = await InitSessionInternalAsync(forceRefresh: true, stateVersion, oidcTokens);
+				return new MobileLoginResult
 				{
-					HAppsLog.Warn("Ignoring deep link that does not match redirectUri");
-					return;
-				}
+					AccessToken = session.AccessToken,
+					IdToken = oidcTokens.id_token,
+					OidcAccessToken = oidcTokens.access_token,
+					TokenType = oidcTokens.token_type,
+					ExpiresIn = session.AccessTokenExpiresAtUtc > 0
+						? (int)Math.Max(0, session.AccessTokenExpiresAtUtc - GetUnixTimeSeconds())
+						: oidcTokens.expires_in,
+					Scope = oidcTokens.scope,
+					Code = code,
+					CodeVerifier = codeVerifier,
+					RedirectUri = redirectUri,
+					PublicId = session.PublicId,
+					SocialId = socialId,
+					Verified = session.Verified,
+					DeviceId = session.DeviceId
+				};
+			});
 
-				var query = ParseQuery(url);
-				if (query.TryGetValue("error", out var error))
-				{
-					HAppsLog.Warn("Mobile auth deep link returned an error");
-					loginTcs.TrySetResult(new MobileLoginResult { Error = error });
-					return;
-				}
-
-				if (!query.TryGetValue("state", out var returnedState) || returnedState != expectedState)
-				{
-					HAppsLog.Error("OIDC state mismatch");
-					loginTcs.TrySetException(new InvalidOperationException("OIDC state mismatch."));
-					return;
-				}
-
-				if (!query.TryGetValue("code", out var code) || string.IsNullOrWhiteSpace(code))
-				{
-					HAppsLog.Error("OIDC redirect does not contain authorization code.");
-					loginTcs.TrySetException(new InvalidOperationException("OIDC redirect does not contain authorization code."));
-					return;
-				}
-
-				var discovery = await GetDiscoveryAsync(stateVersion);
-				var oidcTokens = await ExchangeCodeAsync(
-					discovery.token_endpoint,
-					_options.ClientId,
-					code,
-					_options.RedirectUri,
-					codeVerifier,
-					HttpTimeoutSeconds);
-				ThrowIfStateInvalid(stateVersion);
-
-				if (string.IsNullOrWhiteSpace(oidcTokens.id_token))
-					throw new InvalidOperationException("Token exchange response does not contain id_token.");
-
-				var socialId = ExtractSubjectFromJwt(oidcTokens.id_token);
-				var result = await RunSessionExclusiveAsync(stateVersion, async () =>
-				{
-					await ExchangeOidcAsync(expectedState, oidcTokens.id_token, stateVersion);
-					var session = await InitSessionInternalAsync(forceRefresh: true, stateVersion);
-					var tokenSet = await _tokenStore.LoadAsync() ?? new MobileTokenSet();
-					ThrowIfStateInvalid(stateVersion);
-					tokenSet.IdToken = oidcTokens.id_token;
-					tokenSet.OidcAccessToken = oidcTokens.access_token;
-					tokenSet.SocialId = socialId;
-					await _tokenStore.SaveAsync(tokenSet);
-					ThrowIfStateInvalid(stateVersion);
-					_currentSession.IsAuthorized = true;
-					_loggedIn = true;
-					_userData = new UserData
-					{
-						userId = session.PublicId,
-						userName = socialId,
-						verified = session.Verified
-					};
-
-					return new MobileLoginResult
-					{
-						AccessToken = session.AccessToken,
-						IdToken = oidcTokens.id_token,
-						OidcAccessToken = oidcTokens.access_token,
-						TokenType = oidcTokens.token_type,
-						ExpiresIn = session.AccessTokenExpiresAtUtc > 0
-							? (int)Math.Max(0, session.AccessTokenExpiresAtUtc - GetUnixTimeSeconds())
-							: oidcTokens.expires_in,
-						Scope = oidcTokens.scope,
-						Code = code,
-						CodeVerifier = codeVerifier,
-						RedirectUri = _options.RedirectUri,
-						PublicId = session.PublicId,
-						SocialId = socialId,
-						Verified = session.Verified,
-						DeviceId = session.DeviceId
-					};
-				});
-
-				loginTcs.TrySetResult(result);
-			}
-			catch (Exception ex)
-			{
-				loginTcs.TrySetException(ex);
-			}
+			return result;
 		}
 
-		private async Task ExchangeOidcAsync(string state, string idToken, int stateVersion)
+		private async Task ExchangeOidcAsync(string state, string idToken, OperationContext stateVersion)
 		{
 			ThrowIfStateInvalid(stateVersion);
 			var tokenSet = await _tokenStore.LoadAsync();
@@ -939,7 +969,7 @@ namespace HAppsSDK
 			var response = await SendJsonPostAsync<OidcExchangeRequest, OidcExchangeResponse>(
 				BuildPortalUrl(OidcExchangePath),
 				request,
-				HttpTimeoutSeconds);
+				HttpTimeoutSeconds, stateVersion.CancellationToken);
 			ThrowIfStateInvalid(stateVersion);
 			if (response == null || !response.ok)
 				throw new InvalidOperationException("OIDC exchange response is invalid.");
@@ -948,7 +978,7 @@ namespace HAppsSDK
 		private async Task<MobileSession> ApplySessionResponseAsync(
 			MobileTokenSet tokenSet,
 			InitSessionResponse response,
-			int stateVersion)
+			OperationContext stateVersion)
 		{
 			ThrowIfStateInvalid(stateVersion);
 			tokenSet.AccessToken = response.accessToken;
@@ -964,6 +994,7 @@ namespace HAppsSDK
 
 		private MobileSession ApplyCachedSession(MobileTokenSet tokenSet)
 		{
+			var previous = _currentSession?.Copy();
 			_currentSession = new MobileSession
 			{
 				DeviceId = tokenSet.DeviceId,
@@ -985,11 +1016,23 @@ namespace HAppsSDK
 			};
 
 			HAppsLog.Log($"Mobile session applied: verified={tokenSet.Verified}, isAuthorized={_currentSession.IsAuthorized}");
-			return _currentSession;
+			var snapshot = _currentSession.Copy();
+			NotifySessionChanged(previous);
+			return snapshot;
+		}
+
+		private void NotifySessionChanged(MobileSession previous)
+		{
+			if (SessionChanged == null) return;
+			var current = _currentSession?.Copy();
+			foreach (Action<MobileSession, MobileSession> handler in SessionChanged.GetInvocationList())
+				try { handler(previous?.Copy(), current?.Copy()); }
+				catch (Exception ex) { HAppsLog.Error("Session subscriber failed: " + ex.GetType().Name); }
 		}
 
 		private async Task ClearLocalStateAsync()
 		{
+			var previous = _currentSession?.Copy();
 			var tokenSet = await _tokenStore.LoadAsync();
 			TryDeleteDeviceKey(tokenSet);
 			_userData = null;
@@ -997,7 +1040,8 @@ namespace HAppsSDK
 			_currentSession = null;
 			_analyticProvider = null;
 			_analyticKey = null;
-			await _tokenStore.ClearAsync();
+			try { await _tokenStore.ClearAsync(); }
+			finally { NotifySessionChanged(previous); }
 		}
 
 		private MobileProof CreateProofAsync(string action, MobileTokenSet tokenSet, params string[] extraFields)
@@ -1022,26 +1066,25 @@ namespace HAppsSDK
 			};
 		}
 
-		private static async Task<string> SendGetAsync(string url, int timeoutSeconds)
+		private async Task<string> SendGetAsync(string url, int timeoutSeconds, CancellationToken cancellationToken)
 		{
 			LogHttpRequest("GET", url, null);
 			using var request = UnityWebRequest.Get(url);
 			request.timeout = timeoutSeconds;
 			request.SetRequestHeader("Accept", "application/json");
-			var operation = request.SendWebRequest();
-			await AwaitAsyncOperation(operation);
+			await SendRequestAsync(request, cancellationToken);
 			LogHttpResponse("GET", url, request.responseCode, request.downloadHandler.text);
 
 			if (request.result != UnityWebRequest.Result.Success)
 			{
 				HAppsLog.Error($"GET request failed: statusCode={request.responseCode}, error={request.error}");
-				throw new InvalidOperationException($"GET request failed: {request.error}");
+				throw CreateHttpException(request);
 			}
 
 			return request.downloadHandler.text;
 		}
 
-		private static async Task<TResponse> SendJsonPostAsync<TRequest, TResponse>(string url, TRequest payload, int timeoutSeconds)
+		private async Task<TResponse> SendJsonPostAsync<TRequest, TResponse>(string url, TRequest payload, int timeoutSeconds, CancellationToken cancellationToken)
 			where TResponse : class
 		{
 			var json = JsonUtility.ToJson(payload);
@@ -1052,21 +1095,20 @@ namespace HAppsSDK
 			request.downloadHandler = new DownloadHandlerBuffer();
 			request.SetRequestHeader("Content-Type", "application/json");
 			request.SetRequestHeader("Accept", "application/json");
-			var operation = request.SendWebRequest();
-			await AwaitAsyncOperation(operation);
+			await SendRequestAsync(request, cancellationToken);
 
 			var responseText = request.downloadHandler.text;
 			LogHttpResponse("POST", url, request.responseCode, responseText);
 			if (request.result != UnityWebRequest.Result.Success)
 			{
 				HAppsLog.Error($"POST request failed: statusCode={request.responseCode}, error={request.error}");
-				throw new MobileApiException((long)request.responseCode, responseText, $"POST request failed: {request.error}");
+				throw CreateHttpException(request);
 			}
 
 			return JsonUtility.FromJson<TResponse>(responseText);
 		}
 
-		private static async Task<string> SendAuthorizedJsonPostAsync(string url, string bearerToken, string json, int timeoutSeconds)
+		private async Task<string> SendAuthorizedJsonPostAsync(string url, string bearerToken, string json, int timeoutSeconds, CancellationToken cancellationToken)
 		{
 			LogHttpRequest("POST", url, json ?? "{}");
 			using var request = new UnityWebRequest(url, UnityWebRequest.kHttpVerbPOST);
@@ -1076,14 +1118,13 @@ namespace HAppsSDK
 			request.SetRequestHeader("Content-Type", "application/json");
 			request.SetRequestHeader("Accept", "application/json");
 			request.SetRequestHeader("Authorization", $"Bearer {bearerToken}");
-			var operation = request.SendWebRequest();
-			await AwaitAsyncOperation(operation);
+			await SendRequestAsync(request, cancellationToken);
 			LogHttpResponse("POST", url, request.responseCode, request.downloadHandler.text);
 
 			if (request.result != UnityWebRequest.Result.Success)
 			{
 				HAppsLog.Error($"Authorized POST request failed: statusCode={request.responseCode}, error={request.error}");
-				throw new MobileApiException((long)request.responseCode, request.downloadHandler.text, $"POST request failed: {request.error}");
+				throw CreateHttpException(request);
 			}
 
 			return request.downloadHandler.text;
@@ -1104,13 +1145,13 @@ namespace HAppsSDK
 			});
 		}
 
-		private static async Task<OidcTokenResponse> ExchangeCodeAsync(
+		private async Task<OidcTokenResponse> ExchangeCodeAsync(
 			string tokenEndpoint,
 			string clientId,
 			string code,
 			string redirectUri,
 			string codeVerifier,
-			int timeoutSeconds)
+			int timeoutSeconds, CancellationToken cancellationToken)
 		{
 			var form = new Dictionary<string, string>
 			{
@@ -1134,15 +1175,14 @@ namespace HAppsSDK
 			request.downloadHandler = new DownloadHandlerBuffer();
 			request.SetRequestHeader("Content-Type", "application/x-www-form-urlencoded");
 			request.SetRequestHeader("Accept", "application/json");
-			var operation = request.SendWebRequest();
-			await AwaitAsyncOperation(operation);
+			await SendRequestAsync(request, cancellationToken);
 
 			var responseText = request.downloadHandler.text;
 			LogHttpResponse("POST", tokenEndpoint, request.responseCode, responseText);
 			if (request.result != UnityWebRequest.Result.Success)
 			{
 				HAppsLog.Error($"Token exchange failed: statusCode={request.responseCode}, error={request.error}");
-				throw new InvalidOperationException($"Token exchange failed: {request.error}");
+				throw CreateHttpException(request);
 			}
 
 			var response = JsonUtility.FromJson<OidcTokenResponse>(responseText);
@@ -1183,12 +1223,26 @@ namespace HAppsSDK
 			return uri.GetLeftPart(UriPartial.Path);
 		}
 
-		private static Task AwaitAsyncOperation(AsyncOperation operation)
+		private async Task SendRequestAsync(UnityWebRequest request, CancellationToken cancellationToken)
 		{
-			var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-			operation.completed += _ => tcs.TrySetResult(true);
-			return tcs.Task;
+			using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _lifetimeCancellation.Token);
+			linked.Token.ThrowIfCancellationRequested();
+			var operation = request.SendWebRequest();
+			var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+			Action<AsyncOperation> completed = _ => completion.TrySetResult(true);
+			operation.completed += completed;
+			if (operation.isDone) completion.TrySetResult(true);
+			try { await HAppsAsync.WaitAsync(completion.Task, linked.Token); }
+			finally
+			{
+				operation.completed -= completed;
+				if (!operation.isDone) request.Abort();
+			}
 		}
+
+		private static HAppsMobileException CreateHttpException(UnityWebRequest request)
+			=> new HAppsMobileException(request.responseCode, request.downloadHandler?.text,
+				request.GetResponseHeader("X-Request-Id"));
 
 		private static Dictionary<string, string> ParseQuery(string url)
 		{
@@ -1738,16 +1792,5 @@ namespace HAppsSDK
 			public string Signature;
 		}
 
-		private sealed class MobileApiException : Exception
-		{
-			public long StatusCode { get; }
-			public string ResponseBody { get; }
-
-			public MobileApiException(long statusCode, string responseBody, string message) : base(message)
-			{
-				StatusCode = statusCode;
-				ResponseBody = responseBody ?? string.Empty;
-			}
-		}
 	}
 }

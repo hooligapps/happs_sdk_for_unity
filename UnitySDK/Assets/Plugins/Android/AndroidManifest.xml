@@ -1,28 +1,25 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.example.game">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.example.happssample">
+  <queries>
+    <intent>
+      <action android:name="android.support.customtabs.action.CustomTabsService" />
+    </intent>
+    <package android:name="com.android.chrome" />
+    <package android:name="com.chrome.beta" />
+    <package android:name="com.chrome.dev" />
+    <package android:name="com.chrome.canary" />
+  </queries>
   <application>
     <activity android:name="com.unity3d.player.UnityPlayerActivity" android:exported="true" android:launchMode="singleTask" android:theme="@style/UnityThemeSelector">
       <intent-filter>
         <action android:name="android.intent.action.MAIN" />
         <category android:name="android.intent.category.LAUNCHER" />
       </intent-filter>
-      <intent-filter android:label="auth-callback">
+      <intent-filter android:autoVerify="true" android:label="app-links">
         <action android:name="android.intent.action.VIEW" />
         <category android:name="android.intent.category.DEFAULT" />
         <category android:name="android.intent.category.BROWSABLE" />
-        <data android:scheme="com.example.game" android:host="auth" android:path="/callback" />
-      </intent-filter>
-      <intent-filter android:label="auth-logout">
-        <action android:name="android.intent.action.VIEW" />
-        <category android:name="android.intent.category.DEFAULT" />
-        <category android:name="android.intent.category.BROWSABLE" />
-        <data android:scheme="com.example.game" android:host="auth" android:path="/logout" />
-      </intent-filter>
-      <intent-filter android:label="payment-callback">
-        <action android:name="android.intent.action.VIEW" />
-        <category android:name="android.intent.category.DEFAULT" />
-        <category android:name="android.intent.category.BROWSABLE" />
-        <data android:scheme="com.example.game" android:host="payment" android:path="/callback" />
+        <data android:scheme="https" android:host="links.example.com" android:path="/games/sample-game/app/callback" />
       </intent-filter>
       <meta-data android:name="unityplayer.UnityActivity" android:value="true" />
     </activity>

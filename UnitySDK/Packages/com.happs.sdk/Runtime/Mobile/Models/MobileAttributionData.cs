@@ -12,6 +12,8 @@ namespace HAppsSDK
 		public string Campaign;
 		public string CampaignId;
 		public string CustomData;
+		public string QueryParams;
+		public string Referer;
 		public string HaffCid;
 		public string HaffPid;
 		public string UtmCampaign;
@@ -31,6 +33,10 @@ namespace HAppsSDK
 				throw new ArgumentException("Attribution observation time must be a Unix timestamp in seconds.");
 			if (Encoding.UTF8.GetByteCount(CustomData ?? string.Empty) > 16384)
 				throw new ArgumentException("Attribution custom data exceeds 16384 UTF-8 bytes.");
+			if (Encoding.UTF8.GetByteCount(QueryParams ?? string.Empty) > 16384)
+				throw new ArgumentException("Attribution query params exceed 16384 UTF-8 bytes.");
+			if (Encoding.UTF8.GetByteCount(Referer ?? string.Empty) > 4096)
+				throw new ArgumentException("Attribution referer exceeds 4096 UTF-8 bytes.");
 			foreach (var value in new[]
 			{
 				Provider, ProviderInstallId, MediaSource, Campaign, CampaignId,

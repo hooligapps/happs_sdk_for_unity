@@ -9,17 +9,18 @@ public sealed class HAppsMobileSample : MonoBehaviour
 {
     [Header("Server Flow")]
     [SerializeField] private string portalUrl = "https://portal.example.com";
-    [SerializeField] private string clientId = "sample-game-android";
+    [SerializeField] private string clientId = "sample-game-mobile";
+    [SerializeField] private string appLinkBaseUrl = "https://links.example.com/games/sample-game/app";
 
     [Header("Update Test Data")]
-    [SerializeField] private int versionCode = 104;
+    [SerializeField] private int versionCode = 1;
 
     [Header("Payment Test Data")]
-    [SerializeField] private string productId = "test-product";
+    [SerializeField] private string productId = "sample-product";
     [SerializeField] private string price = "1.99";
     [SerializeField] private string currency = "USD";
-    [SerializeField] private string description = "Test payment";
-    [SerializeField] private string requestId = "req-001";
+    [SerializeField] private string description = "Sample payment";
+    [SerializeField] private string requestId = "sample-request-001";
 
     [Header("Debug UI")]
     [SerializeField] private bool showDebugGui = true;
@@ -43,6 +44,7 @@ public sealed class HAppsMobileSample : MonoBehaviour
     private bool _isLoggedIn;
     private string _socialId = "-";
     private bool _isLoginInFlight;
+    private bool _isLogoutInFlight;
     private bool _isCheckUpdateInFlight;
 
     private void OnEnable()
@@ -74,14 +76,19 @@ public sealed class HAppsMobileSample : MonoBehaviour
                 LogError("clientId is empty");
                 return;
             }
+            if (string.IsNullOrWhiteSpace(appLinkBaseUrl))
+            {
+                LogError("appLinkBaseUrl is empty");
+                return;
+            }
 
+            var normalizedAppLinkBaseUrl = appLinkBaseUrl.Trim().TrimEnd('/');
             HApps.SetDebugLogging(true);
             HApps.ConfigureMobile(new HAppsMobileAuthOptions
             {
                 PortalUrl = portalUrl,
                 ClientId = clientId,
-                RedirectUri = "com.example.game://auth/callback",
-                PostLogoutRedirectUri = "com.example.game://auth/logout"
+                CallbackUri = normalizedAppLinkBaseUrl + "/callback"
             });
 
             _isConfigured = true;
@@ -253,10 +260,11 @@ public sealed class HAppsMobileSample : MonoBehaviour
         if (!EnsureConfigured())
             return;
 
-        if (_isLoginInFlight)
+        if (_isLoginInFlight || _isLogoutInFlight)
             return;
 
         ResetScrollInteraction();
+        _isLogoutInFlight = true;
         try
         {
             LogStatus("Starting logout");
@@ -265,9 +273,20 @@ public sealed class HAppsMobileSample : MonoBehaviour
             _socialId = "-";
             LogStatus("Logout: done");
         }
+        catch (OperationCanceledException)
+        {
+            var session = HApps.Mobile.CurrentSession;
+            _isLoggedIn = session?.IsAuthorized == true;
+            _socialId = HApps.Mobile.CurrentUser?.userName ?? "-";
+            LogStatus("Logout: cancelled");
+        }
         catch (Exception ex)
         {
             LogError($"Logout failed: {ex}");
+        }
+        finally
+        {
+            _isLogoutInFlight = false;
         }
     }
 
@@ -331,7 +350,7 @@ public sealed class HAppsMobileSample : MonoBehaviour
         {
             DrawButtonRow(lineHeight,
                 ("Create Payment", CreatePayment),
-                ("Logout", Logout));
+                (_isLogoutInFlight ? "Logging Out..." : "Logout", _isLogoutInFlight ? null : (Action)Logout));
         }
         else
         {

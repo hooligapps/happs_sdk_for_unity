@@ -30,6 +30,7 @@ namespace HAppsSDK
 
         private readonly HAppsJSBridge _bridge;
         private bool _disposed;
+        private string _paymentOrderId;
 
         private readonly Dictionary<OperationType, OperationBase> _operations
             = new();
@@ -42,6 +43,7 @@ namespace HAppsSDK
 
             _bridge = go.AddComponent<HAppsJSBridge>();
 
+            _bridge.Tick += TickOperations;
             _bridge.OnConnected += HandleConnected;
             _bridge.OnProfile += HandleProfile;
             _bridge.OnPaymentCreated += HandlePaymentCreated;
@@ -54,48 +56,61 @@ namespace HAppsSDK
             HAppsLog.Log("Provider created");
         }
 
-        public override Task<bool> Connect()
+        public override Task<bool> Connect() => Connect(CancellationToken.None);
+
+        public Task<bool> Connect(CancellationToken cancellationToken)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             return StartOperation<bool>(
                 OperationType.Connect,
                 () => _bridge.SendMessage("connect", "{}"),
-                false,
-                DEFAULT_TIMEOUT_MS);
+                DEFAULT_TIMEOUT_MS, cancellationToken);
         }
 
-        public override Task<UserData> GetProfile()
+        public override Task<UserData> GetProfile() => GetProfile(CancellationToken.None);
+
+        public Task<UserData> GetProfile(CancellationToken cancellationToken)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             return StartOperation<UserData>(
                 OperationType.GetProfile,
                 () => _bridge.SendMessage("get_profile", "{}"),
-                true,
-                DEFAULT_TIMEOUT_MS);
+                DEFAULT_TIMEOUT_MS, cancellationToken);
         }
 
-        public override Task<PaymentData> MakePayment(string orderId)
+        public override Task<PaymentData> MakePayment(string orderId) => MakePayment(orderId, CancellationToken.None);
+
+        public Task<PaymentData> MakePayment(string orderId, CancellationToken cancellationToken)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (string.IsNullOrWhiteSpace(orderId))
+                throw new ArgumentException("Order ID is required.", nameof(orderId));
             var json = JsonUtility.ToJson(new PaymentRequest { orderId = orderId });
 
             return StartOperation<PaymentData>(
                 OperationType.MakePayment,
-                () => _bridge.SendMessage("open_payment", json),
-                false,
-                INTERACTIVE_TIMEOUT_MS);
+                () => { _paymentOrderId = orderId; _bridge.SendMessage("open_payment", json); },
+                INTERACTIVE_TIMEOUT_MS, cancellationToken);
         }
 
-        public override Task<AuthPopupData> OpenIdpAuthPopup(string url)
+        public override Task<AuthPopupData> OpenIdpAuthPopup(string url) => OpenIdpAuthPopup(url, CancellationToken.None);
+
+        public Task<AuthPopupData> OpenIdpAuthPopup(string url, CancellationToken cancellationToken)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var json = JsonUtility.ToJson(new OpenAuthPopupRequest { url = url });
 
             return StartOperation<AuthPopupData>(
                 OperationType.OpenAuthPopup,
                 () => _bridge.SendMessage("popup_auth", json),
-                true,
-                INTERACTIVE_TIMEOUT_MS);
+                INTERACTIVE_TIMEOUT_MS, cancellationToken);
         }
 
-        public override Task<bool> OpenPortalAuthPopup()
+        public override Task<bool> OpenPortalAuthPopup() => OpenPortalAuthPopup(CancellationToken.None);
+
+        public Task<bool> OpenPortalAuthPopup(CancellationToken cancellationToken)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (_disposed)
                 throw new ObjectDisposedException(nameof(HAppsWebProvider));
 
@@ -105,12 +120,12 @@ namespace HAppsSDK
             return StartOperation<bool>(
                 OperationType.OpenPortalAuth,
                 () => _bridge.SendMessage("portal_auth", "{}"),
-                true,
-                INTERACTIVE_TIMEOUT_MS);
+                INTERACTIVE_TIMEOUT_MS, cancellationToken);
         }
 
         public override void OpenAgeVerification(bool adultMode = true)
         {
+            if (_disposed) throw new ObjectDisposedException(nameof(HAppsWebProvider));
             var json = JsonUtility.ToJson(new OpenAgeVerificationRequest
             {
                 adultMode = adultMode
@@ -121,6 +136,7 @@ namespace HAppsSDK
 
         public override void SetTheaterMode(bool enabled)
         {
+            if (_disposed) throw new ObjectDisposedException(nameof(HAppsWebProvider));
             var json = JsonUtility.ToJson(new SetTheaterModeRequest
             {
                 enabled = enabled
@@ -131,6 +147,7 @@ namespace HAppsSDK
 
         public override void SetFullscreen(bool enabled)
         {
+            if (_disposed) throw new ObjectDisposedException(nameof(HAppsWebProvider));
             var json = JsonUtility.ToJson(new SetFullscreenRequest
             {
                 enabled = enabled
@@ -165,6 +182,7 @@ namespace HAppsSDK
 
             if (_bridge != null)
             {
+                _bridge.Tick -= TickOperations;
                 _bridge.OnConnected -= HandleConnected;
                 _bridge.OnProfile -= HandleProfile;
                 _bridge.OnPaymentCreated -= HandlePaymentCreated;
@@ -203,28 +221,21 @@ namespace HAppsSDK
 
         private void RaiseAuthCompleted(UserData user, SignatureData signature)
         {
-            AuthCompleted?.Invoke(user, signature);
+            HAppsEvents.Invoke(AuthCompleted, user, signature);
         }
 
-        private Task<T> StartOperation<T>(OperationType type, Action startAction, bool allowRestart, int? timeoutMs)
+        private Task<T> StartOperation<T>(OperationType type, Action startAction, int? timeoutMs, CancellationToken cancellationToken)
         {
             if (_disposed)
                 throw new ObjectDisposedException(nameof(HAppsWebProvider));
 
-            if (_operations.TryGetValue(type, out var existing))
-            {
-                if (!allowRestart)
-                    throw new InvalidOperationException($"{type} already running");
+            TickOperations(Time.realtimeSinceStartupAsDouble);
+            if (_operations.ContainsKey(type))
+                throw new InvalidOperationException($"{type} already running");
 
-                existing.Fail(new Exception("Operation restarted"));
-                _operations.Remove(type);
-            }
-
-            var op = new Operation<T>(timeoutMs);
+            var op = new Operation<T>(timeoutMs, Time.realtimeSinceStartupAsDouble, cancellationToken);
 
             _operations[type] = op;
-            op.UntypedTask.ContinueWith(_ => CleanupFailedOperation(type, op),
-                TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously);
 
             HAppsLog.Log($"Starting {type}");
 
@@ -241,6 +252,17 @@ namespace HAppsSDK
             return op.Task;
         }
 
+        private void TickOperations(double now)
+        {
+            if (_operations.Count == 0) return;
+            foreach (var entry in new List<KeyValuePair<OperationType, OperationBase>>(_operations))
+            {
+                entry.Value.Tick(now);
+                if (entry.Value.UntypedTask.IsCompleted)
+                    CleanupFailedOperation(entry.Key, entry.Value);
+            }
+        }
+
         private void CleanupFailedOperation(OperationType type, OperationBase operation)
         {
             if (_operations.TryGetValue(type, out var current) && ReferenceEquals(current, operation))
@@ -249,6 +271,7 @@ namespace HAppsSDK
 
         private void Complete<T>(OperationType type, T result)
         {
+            TickOperations(Time.realtimeSinceStartupAsDouble);
             if (!_operations.Remove(type, out var opBase))
             {
                 HAppsLog.Warn($"No pending operation for {type}");
@@ -286,7 +309,7 @@ namespace HAppsSDK
 
         private void HandleProfile(UserData user, HAppsErrorData error)
         {
-            if (error != null)
+            if (error != null && (!string.IsNullOrEmpty(error.code) || !string.IsNullOrEmpty(error.message)))
             {
                 Fail(OperationType.GetProfile, new HAppsException(error));
                 return;
@@ -298,13 +321,20 @@ namespace HAppsSDK
             Complete(OperationType.GetProfile, user);
         }
 
+        private bool MatchesPayment(PaymentData data)
+        {
+            if (data == null || string.IsNullOrEmpty(data.orderId) ||
+                !string.Equals(data.orderId, _paymentOrderId, StringComparison.Ordinal))
+            {
+                HAppsLog.Warn("Ignoring payment response without a matching order ID.");
+                return false;
+            }
+            return true;
+        }
+
         private void HandlePaymentCreated(PaymentData data)
         {
-            if (data == null)
-            {
-                Fail(OperationType.MakePayment, new InvalidOperationException("Payment response is empty."));
-                return;
-            }
+            if (!MatchesPayment(data)) return;
 
             if (data.Status != PaymentStatus.Started)
                 Complete(OperationType.MakePayment, data);
@@ -312,6 +342,7 @@ namespace HAppsSDK
 
         private void HandlePaymentCompleted(PaymentData data)
         {
+            if (!MatchesPayment(data)) return;
             HAppsJSBridge.TryFocusWindow();
             Complete(OperationType.MakePayment, data);
         }
@@ -334,8 +365,8 @@ namespace HAppsSDK
             if (!string.IsNullOrEmpty(sig))
                 Signature = sig;
 
-            RaiseAuthCompleted(user, signature);
             Complete(OperationType.OpenPortalAuth, !string.IsNullOrEmpty(sig));
+            RaiseAuthCompleted(user, signature);
         }
 
         private void HandleUserChanged(UserData user)
@@ -348,7 +379,7 @@ namespace HAppsSDK
 
             _userData = user;
             _loggedIn = true;
-            UserChanged?.Invoke(user);
+            HAppsEvents.Invoke(UserChanged, user);
         }
 
         private void HandleError(HAppsErrorData error)
@@ -360,7 +391,7 @@ namespace HAppsSDK
             }
 
             HAppsLog.Error($"JS SDK error: {error}");
-            Error?.Invoke(error);
+            HAppsEvents.Invoke(Error, error);
         }
 
         [Serializable]

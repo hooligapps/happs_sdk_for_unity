@@ -10,5 +10,6 @@ namespace HAppsSDK
 		public string PublicId;
 		public bool Verified;
 		public bool IsAuthorized;
+		public MobileSession Copy() => (MobileSession)MemberwiseClone();
 	}
 }
