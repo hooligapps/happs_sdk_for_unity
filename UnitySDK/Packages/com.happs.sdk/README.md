@@ -1,6 +1,6 @@
 # HApps Unity SDK
 
-Unity SDK 3.3.0-preview.1 for HApps WebGL integrations through JS SDK 1.1.0 and native Android integrations.
+Unity SDK 3.3.0-preview.2 for HApps WebGL integrations through JS SDK 1.1.0 and native Android integrations.
 Optional mobile attribution is provided by the separate [AppsFlyer adapter](../../../Integrations/com.happs.sdk.appsflyer/README.md), which is not a dependency of this package.
 
 ## Installation
@@ -10,15 +10,17 @@ Add the package to your Unity project through `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.3.0-preview.1",
+    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.3.0-preview.2",
     "com.google.external-dependency-manager": "https://github.com/googlesamples/unity-jar-resolver.git?path=upm#v1.2.188"
   }
 }
 ```
 
-Use the release tag `v3.3.0-preview.1`.
+Use the release tag `v3.3.0-preview.2`.
 
-Run `Assets > External Dependency Manager > Android Resolver > Force Resolve` for Android builds. The mobile SDK uses AndroidX Browser Custom Tabs for authentication and logout, and Auth Tab with a Custom Tab fallback for payment.
+Run `Assets > External Dependency Manager > Android Resolver > Force Resolve` for Android builds.
+
+The core package resolves AndroidX Browser 1.8.0 so it builds with the default Unity 2022.3 Android toolchain. It uses Custom Tabs for authentication, logout and payment. Unity 6 projects with Android Gradle Plugin 8.1 or newer can add the optional [HApps Android Auth Tab package](../../../Integrations/com.happs.sdk.browser-auth-tab/README.md). That package upgrades Browser to 1.9.0; the SDK then uses Auth Tab for payment and falls back to a Custom Tab when the browser does not support it.
 
 For an existing WebGL project, follow [WebGL Migration: SDK 2.0.6 to 3.1.1](MIGRATION_WEB_2.0.6_TO_3.1.1.md).
 
@@ -93,7 +95,7 @@ Awaited WebGL and mobile operations also provide `CancellationToken` overloads. 
 Your WebGL page must:
 
 - load `https://cdn.hooli.games/sdk/1.1.0/hooligapps.js`
-- use the JS SDK `1.1.0` contract; unversioned builds are not supported by Unity SDK `3.3.0-preview.1`
+- use the JS SDK `1.1.0` contract; unversioned builds are not supported by Unity SDK `3.3.0-preview.2`
 - initialize the core client with `HApps.init(...)`
 - attach Unity with `HApps.unity.attach(...)`
 - use `objectName: "HAppsJSBridge"`

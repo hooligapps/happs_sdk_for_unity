@@ -6,7 +6,7 @@ Changes to configuration, cancellation, session events and exceptions are docume
 
 ## 1. Requirements and environments
 
-- HApps Unity SDK `3.3.0-preview.1`.
+- HApps Unity SDK `3.3.0-preview.2`.
 - Android API 23 or newer.
 - iOS is not supported.
 
@@ -36,13 +36,21 @@ Add the package to `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.3.0-preview.1",
+    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.3.0-preview.2",
     "com.google.external-dependency-manager": "https://github.com/googlesamples/unity-jar-resolver.git?path=upm#v1.2.188"
   }
 }
 ```
 
-Run `Assets > External Dependency Manager > Android Resolver > Force Resolve` after installing or updating the package. The SDK uses AndroidX Browser Custom Tabs for authentication and logout. Payment uses Auth Tab when the browser supports it and falls back to a Custom Tab otherwise.
+Run `Assets > External Dependency Manager > Android Resolver > Force Resolve` after installing or updating the package.
+
+The core package resolves AndroidX Browser 1.8.0 and supports the default Unity 2022.3 Android toolchain. It opens authentication, logout and payment in Custom Tabs. Unity 6 projects with Android Gradle Plugin 8.1 or newer can add Auth Tab payment returns with the optional package:
+
+```json
+"com.happs.sdk.browser-auth-tab": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/Integrations/com.happs.sdk.browser-auth-tab#v3.3.0-preview.2"
+```
+
+The optional package upgrades AndroidX Browser to 1.9.0. Re-run Force Resolve after adding or removing it. Do not install it in a Unity 2022.3 project that uses the default Gradle 7.2 and Android Gradle Plugin 7.1.2 toolchain.
 
 Add the separate AppsFlyer package only when the game needs install attribution. Its installation and initialization are documented in [HApps AppsFlyer integration](../../../Integrations/com.happs.sdk.appsflyer/README.md).
 
@@ -108,7 +116,7 @@ The association served by HApps has this shape:
 
 The file must be available over HTTPS without authentication or redirects. The package ID and fingerprint must match the installed APK. The same callback URI is used for authentication, logout and payment. The server identifies the operation with `type=login`, `type=logout`, or `type=payment`. Authentication also adds `code` and `state`, or `error` and `state`; logout adds `state` and `status`; payment adds `orderId` and may add `status`.
 
-Authentication and logout return through the verified App Link. For payment, a supported browser runs an Auth Tab and watches the same callback host and path. When checkout reaches that callback, the Auth Tab closes and returns control to the game before the callback page needs to load. Browsers without Auth Tab support use a Custom Tab fallback. A payment callback only returns the user to the app; it does not confirm payment.
+Authentication and logout return through the verified App Link. When the optional Auth Tab package is installed, a supported browser watches the payment callback host and path. Reaching that callback closes the Auth Tab and returns control to the game before the callback page needs to load. Without the optional package, or when the browser does not support Auth Tab, payment uses a Custom Tab and the callback page must provide its normal fallback return. A payment callback only returns the user to the app; it does not confirm payment.
 
 After installing the APK, verify the association on Android 12 or newer:
 
@@ -296,7 +304,7 @@ MobileCreatePaymentResult payment =
 - use a new value for a new purchase;
 - never reuse it for another player or product.
 
-The SDK creates the order and opens `PaymentUrl`. On supported browsers, it uses an Auth Tab configured with the host and path from `CallbackUri`. Reaching that callback closes the browser surface and resumes the game; query parameters are allowed and do not require additional manifest filters. Unsupported browsers use a Custom Tab fallback.
+The SDK creates the order and opens `PaymentUrl`. With the optional Auth Tab package installed, it configures the browser with the host and path from `CallbackUri`. Reaching that callback closes the browser surface and resumes the game; query parameters are allowed and do not require additional manifest filters. Without the optional package, or on an unsupported browser, it uses a Custom Tab fallback.
 
 `OrderId` confirms order creation only; it does not confirm payment. Returning to the game also does not prove that payment succeeded.
 

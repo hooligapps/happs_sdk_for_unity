@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.3.0-preview.2
+
+- Resolve AndroidX Browser 1.8.0 from the core package for compatibility with the default Unity 2022.3 Android toolchain
+- Add the optional `com.happs.sdk.browser-auth-tab` package, which upgrades AndroidX Browser to 1.9.0 and enables Auth Tab payment returns on compatible toolchains
+
 ## 3.3.0-preview.1
 
 - Add a migration guide for projects updating from `v3.2.0`

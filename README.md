@@ -1,6 +1,6 @@
 # HApps Unity SDK
 
-Unity SDK 3.3.0-preview.1 for HApps WebGL integrations through JS SDK 1.1.0 and native Android integrations. Optional Android attribution is available through the separate [AppsFlyer integration package](Integrations/com.happs.sdk.appsflyer/README.md), which includes the official AppsFlyer Unity SDK 6.18.1.
+Unity SDK 3.3.0-preview.2 for HApps WebGL integrations through JS SDK 1.1.0 and native Android integrations. Optional Android attribution is available through the separate [AppsFlyer integration package](Integrations/com.happs.sdk.appsflyer/README.md), which includes the official AppsFlyer Unity SDK 6.18.1.
 
 ## Installation
 
@@ -9,7 +9,8 @@ Add the package to your Unity project through `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.3.0-preview.1"
+    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.3.0-preview.2",
+    "com.google.external-dependency-manager": "https://github.com/googlesamples/unity-jar-resolver.git?path=upm#v1.2.188"
   }
 }
 ```
@@ -17,6 +18,8 @@ Add the package to your Unity project through `Packages/manifest.json`:
 The SDK is distributed as a Unity package from:
 
 - `UnitySDK/Packages/com.happs.sdk`
+
+The core package uses AndroidX Browser 1.8.0 and supports the default Unity 2022.3 Android toolchain. Unity 6 projects can add the optional [Android Auth Tab package](Integrations/com.happs.sdk.browser-auth-tab/README.md) to use Browser 1.9.0 and automatically close the payment browser on the verified callback.
 
 Upgrading an existing WebGL integration from SDK 2.0.6: see [WebGL Migration: 2.0.6 to 3.1.1](UnitySDK/Packages/com.happs.sdk/MIGRATION_WEB_2.0.6_TO_3.1.1.md).
 
@@ -525,4 +528,4 @@ Expected response shape:
 
 ## Version
 
-HApps Unity SDK - Integration Guide v3.3.0-preview.1 (JS SDK 1.1.0)
+HApps Unity SDK - Integration Guide v3.3.0-preview.2 (JS SDK 1.1.0)

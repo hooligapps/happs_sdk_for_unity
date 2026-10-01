@@ -13,12 +13,20 @@
       "source": "embedded",
       "dependencies": {}
     },
+    "com.happs.sdk.browser-auth-tab": {
+      "version": "file:../../Integrations/com.happs.sdk.browser-auth-tab",
+      "depth": 0,
+      "source": "local",
+      "dependencies": {
+        "com.happs.sdk": "3.3.0-preview.2"
+      }
+    },
     "com.happs.sdk.appsflyer": {
       "version": "file:../../Integrations/com.happs.sdk.appsflyer",
       "depth": 0,
       "source": "local",
       "dependencies": {
-        "com.happs.sdk": "3.3.0-preview.1"
+        "com.happs.sdk": "3.3.0-preview.2"
       }
     },
     "com.unity.2d.animation": {

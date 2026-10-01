@@ -94,7 +94,15 @@ Add External Dependency Manager for Unity if the project does not already includ
 Assets > External Dependency Manager > Android Resolver > Force Resolve
 ```
 
-The updated SDK resolves `androidx.browser:browser:1.9.0`. Authentication and logout use a Custom Tab configured to return verified redirects to the application. Payment uses an Auth Tab when supported. The SDK gives it the callback host and path, so reaching that callback closes the browser surface and returns to the game without an `intent://` timer or confirmation dialog. The callback query string does not affect matching. Unsupported browsers fall back to a Custom Tab.
+The core SDK resolves `androidx.browser:browser:1.8.0` for compatibility with the default Unity 2022.3 Android toolchain. Authentication, logout and payment use Custom Tabs. The verified App Link and callback page remain the fallback path back to the game.
+
+Unity 6 projects with Android Gradle Plugin 8.1 or newer can add the optional Auth Tab package using the same release tag:
+
+```json
+"com.happs.sdk.browser-auth-tab": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/Integrations/com.happs.sdk.browser-auth-tab#v3.3.0-preview.2"
+```
+
+It upgrades AndroidX Browser to 1.9.0. Payment then uses Auth Tab when the browser supports it: reaching the configured callback host and path closes the browser surface and returns to the game without an `intent://` timer or confirmation dialog. The callback query string does not affect matching. Do not install this package with the default Unity 2022.3 Gradle 7.2 and Android Gradle Plugin 7.1.2 toolchain.
 
 ## 3. Update lifecycle handling
 
