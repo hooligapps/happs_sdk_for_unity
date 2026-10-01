@@ -1,6 +1,6 @@
 # Changelog
 
-## 3.3.0
+## 3.3.0-preview.1
 
 - Add a migration guide for projects updating from `v3.2.0`
 - Open mobile authentication and logout in an Android Custom Tab that forwards verified redirects to the application, preferring Chrome when available

@@ -6,7 +6,7 @@ Changes to configuration, cancellation, session events and exceptions are docume
 
 ## 1. Requirements and environments
 
-- HApps Unity SDK `3.3.0`.
+- HApps Unity SDK `3.3.0-preview.1`.
 - Android API 23 or newer.
 - iOS is not supported.
 
@@ -36,7 +36,7 @@ Add the package to `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.3.0",
+    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.3.0-preview.1",
     "com.google.external-dependency-manager": "https://github.com/googlesamples/unity-jar-resolver.git?path=upm#v1.2.188"
   }
 }
