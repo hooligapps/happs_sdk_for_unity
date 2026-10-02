@@ -1,6 +1,6 @@
 # HApps Unity SDK
 
-Unity SDK 3.3.0-preview.2 for HApps WebGL integrations through JS SDK 1.1.0 and native Android integrations. Optional Android attribution is available through the separate [AppsFlyer integration package](Integrations/com.happs.sdk.appsflyer/README.md), which includes the official AppsFlyer Unity SDK 6.18.1.
+Unity SDK 3.3.0 for HApps WebGL integrations through JS SDK 1.1.2 and native Android integrations. Optional Android attribution is available through the separate [AppsFlyer integration package](Integrations/com.happs.sdk.appsflyer/README.md), which includes the official AppsFlyer Unity SDK 6.18.1.
 
 ## Installation
 
@@ -9,7 +9,7 @@ Add the package to your Unity project through `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.3.0-preview.2",
+    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.3.0",
     "com.google.external-dependency-manager": "https://github.com/googlesamples/unity-jar-resolver.git?path=upm#v1.2.188"
   }
 }
@@ -47,7 +47,7 @@ void HApps.Web.OpenAgeVerification(bool adultMode = true)
 void HApps.Web.SetFullscreen(bool enabled)
 void HApps.Web.SetTheaterMode(bool enabled)
 void HApps.Web.OpenExternalUrl(string url)
-event Action<UserData, SignatureData> HApps.Web.AuthCompleted
+event Action<UserData, SignatureData, AuthAction> HApps.Web.AuthCompleted
 event Action<UserData> HApps.Web.UserChanged
 event Action<HAppsErrorData> HApps.Web.Error
 bool HApps.Web.IsPortalSite()
@@ -76,10 +76,10 @@ Method semantics:
 - `HApps.Web.OpenIdpAuthPopup(url)` opens standalone backend auth popup and returns `AuthPopupData` for either ticket-based or cookie-based session auth.
 - `HApps.Web.OpenPortalAuthPopup()` opens portal-managed auth UI and returns `true` when portal auth completes successfully. If the connected profile is already verified, it returns `true` locally without opening a popup or emitting a new `AuthCompleted` event.
 - `HApps.Web.OpenAgeVerification(adultMode)` opens portal-managed age verification UI from the game.
-- `HApps.Web.SetFullscreen(enabled)` sends the fullscreen request through JS SDK 1.1.0.
-- `HApps.Web.SetTheaterMode(enabled)` sends the theater-mode request through JS SDK 1.1.0.
-- `HApps.Web.OpenExternalUrl(url)` asks JS SDK 1.1.0 and the portal to open the URL externally.
-- `HApps.Web.AuthCompleted` fires when the external page script sends `auth_complete`, even if you are not awaiting `OpenPortalAuthPopup()`.
+- `HApps.Web.SetFullscreen(enabled)` sends the fullscreen request through JS SDK 1.1.2.
+- `HApps.Web.SetTheaterMode(enabled)` sends the theater-mode request through JS SDK 1.1.2.
+- `HApps.Web.OpenExternalUrl(url)` asks JS SDK 1.1.2 and the portal to open the URL externally.
+- `HApps.Web.AuthCompleted` fires when the external page script sends `auth_complete`, even if you are not awaiting `OpenPortalAuthPopup()`. Its action is `SignUp`, `Linked`, `Login`, or `Unknown` for older portals and unknown values.
 - `HApps.Web.UserChanged` fires on JS SDK `user_changed` and updates `HApps.Web.CurrentUser` first.
 - `HApps.Web.Error` exposes errors reported by the JS SDK. These errors are not correlated with a specific pending operation.
 - `HApps.Web.IsPortalSite()` reflects `window.HApps.isPortal()` from the JS environment.
@@ -167,7 +167,7 @@ switch (authPopupData.Flow)
 ### Standalone WebGL Template Example
 
 ```html
-<script src="https://cdn.hooli.games/sdk/1.1.0/hooligapps.js"></script>
+<script src="https://cdn.hooli.games/sdk/1.1.2/hooligapps.js"></script>
 ```
 
 ```javascript
@@ -233,10 +233,10 @@ This flow requires platform JS bootstrap and Unity-side connection.
 
 ### WebGL Template Setup
 
-Load JS SDK 1.1.0, initialize the core client, and attach the Unity bridge.
+Load JS SDK 1.1.2, initialize the core client, and attach the Unity bridge.
 
 ```html
-<script src="https://cdn.hooli.games/sdk/1.1.0/hooligapps.js"></script>
+<script src="https://cdn.hooli.games/sdk/1.1.2/hooligapps.js"></script>
 ```
 
 ### Portal WebGL Template Example
@@ -244,7 +244,7 @@ Load JS SDK 1.1.0, initialize the core client, and attach the Unity bridge.
 Example portal page setup:
 
 ```html
-<script src="https://cdn.hooli.games/sdk/1.1.0/hooligapps.js"></script>
+<script src="https://cdn.hooli.games/sdk/1.1.2/hooligapps.js"></script>
 ```
 
 ```javascript
@@ -362,9 +362,9 @@ private void OnDisable()
     HApps.Web.AuthCompleted -= HandleAuthCompleted;
 }
 
-private void HandleAuthCompleted(UserData user, SignatureData signature)
+private void HandleAuthCompleted(UserData user, SignatureData signature, AuthAction action)
 {
-    Debug.Log($"auth_complete: {user?.userId}");
+    Debug.Log($"auth_complete: {action}, {user?.userId}");
 }
 ```
 
@@ -490,9 +490,9 @@ Backend must:
 
 1. Validate launch token with the platform.
 2. Create or load the user.
-3. Return the signature expected by JS SDK 1.1.0. User data comes from the platform launch message, not this response.
+3. Return the signature expected by JS SDK 1.1.2. User data comes from the platform launch message, not this response.
 
-JS SDK 1.1.0 sends this request body:
+JS SDK 1.1.2 sends this request body:
 
 ```json
 {
@@ -528,4 +528,4 @@ Expected response shape:
 
 ## Version
 
-HApps Unity SDK - Integration Guide v3.3.0-preview.2 (JS SDK 1.1.0)
+HApps Unity SDK - Integration Guide v3.3.0 (JS SDK 1.1.2)

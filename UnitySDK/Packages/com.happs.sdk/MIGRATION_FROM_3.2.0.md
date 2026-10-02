@@ -99,7 +99,7 @@ The core SDK resolves `androidx.browser:browser:1.8.0` for compatibility with th
 Unity 6 projects with Android Gradle Plugin 8.1 or newer can add the optional Auth Tab package using the same release tag:
 
 ```json
-"com.happs.sdk.browser-auth-tab": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/Integrations/com.happs.sdk.browser-auth-tab#v3.3.0-preview.2"
+"com.happs.sdk.browser-auth-tab": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/Integrations/com.happs.sdk.browser-auth-tab#v3.3.0"
 ```
 
 It upgrades AndroidX Browser to 1.9.0. Payment then uses Auth Tab when the browser supports it: reaching the configured callback host and path closes the browser surface and returns to the game without an `intent://` timer or confirmation dialog. The callback query string does not affect matching. Do not install this package with the default Unity 2022.3 Gradle 7.2 and Android Gradle Plugin 7.1.2 toolchain.
@@ -200,7 +200,29 @@ HAppsAppsFlyer.Shutdown();
 
 Install the SDK through Unity Package Manager. Remove an old imported `HAppsSDK.unitypackage` before updating; the legacy package must not be mixed with the UPM package.
 
-## 8. Verify the update
+## 8. Update WebGL authentication handling
+
+WebGL projects must load HApps JS SDK `1.1.2` and update `AuthCompleted` handlers to accept the authentication action:
+
+```csharp
+private void HandleAuthCompleted(UserData user, SignatureData signature, AuthAction action)
+{
+    switch (action)
+    {
+        case AuthAction.SignUp:
+        case AuthAction.Linked:
+        case AuthAction.Login:
+            break;
+        case AuthAction.Unknown:
+            // Older portals may omit the optional action.
+            break;
+    }
+}
+```
+
+The browser values `"sign_up"`, `"linked"`, and `"login"` map to the corresponding enum values. Missing or unsupported values map to `AuthAction.Unknown`.
+
+## 9. Verify the update
 
 1. Confirm the project compiles without `RedirectUri` or `PostLogoutRedirectUri`.
 2. Confirm the final APK contains the HTTPS callback intent filter.
@@ -209,5 +231,6 @@ Install the SDK through Unity Package Manager. Remove an old imported `HAppsSDK.
 5. Complete login through the SDK Custom Tab and confirm that it returns to the game.
 6. Create a payment and confirm that the browser surface closes and the game resumes after checkout reaches the callback.
 7. If AppsFlyer is installed, confirm attribution initializes and `CurrentAttribution` exposes the expected custom data.
+8. For WebGL, confirm the page loads JS SDK 1.1.2 and `AuthCompleted` receives the expected action.
 
 See [Mobile Integration](MOBILE_INTEGRATION.md) for the complete Android setup.

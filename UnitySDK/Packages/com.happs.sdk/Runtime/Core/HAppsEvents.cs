@@ -12,11 +12,11 @@ namespace HAppsSDK
                 catch (Exception ex) { HAppsLog.Error("Event subscriber failed: " + ex.GetType().Name); }
         }
 
-        public static void Invoke<T1, T2>(Action<T1, T2> handlers, T1 first, T2 second)
+        public static void Invoke<T1, T2, T3>(Action<T1, T2, T3> handlers, T1 first, T2 second, T3 third)
         {
             if (handlers == null) return;
-            foreach (Action<T1, T2> handler in handlers.GetInvocationList())
-                try { handler(first, second); }
+            foreach (Action<T1, T2, T3> handler in handlers.GetInvocationList())
+                try { handler(first, second, third); }
                 catch (Exception ex) { HAppsLog.Error("Event subscriber failed: " + ex.GetType().Name); }
         }
     }

@@ -1,6 +1,6 @@
 # HApps Unity SDK
 
-Unity SDK 3.3.0-preview.2 for HApps WebGL integrations through JS SDK 1.1.0 and native Android integrations.
+Unity SDK 3.3.0 for HApps WebGL integrations through JS SDK 1.1.2 and native Android integrations.
 Optional mobile attribution is provided by the separate [AppsFlyer adapter](../../../Integrations/com.happs.sdk.appsflyer/README.md), which is not a dependency of this package.
 
 ## Installation
@@ -10,13 +10,13 @@ Add the package to your Unity project through `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.3.0-preview.2",
+    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.3.0",
     "com.google.external-dependency-manager": "https://github.com/googlesamples/unity-jar-resolver.git?path=upm#v1.2.188"
   }
 }
 ```
 
-Use the release tag `v3.3.0-preview.2`.
+Use the release tag `v3.3.0`.
 
 Run `Assets > External Dependency Manager > Android Resolver > Force Resolve` for Android builds.
 
@@ -42,7 +42,7 @@ void HApps.Web.OpenAgeVerification(bool adultMode = true)
 void HApps.Web.SetFullscreen(bool enabled)
 void HApps.Web.SetTheaterMode(bool enabled)
 void HApps.Web.OpenExternalUrl(string url)
-event Action<UserData, SignatureData> HApps.Web.AuthCompleted
+event Action<UserData, SignatureData, AuthAction> HApps.Web.AuthCompleted
 event Action<UserData> HApps.Web.UserChanged
 event Action<HAppsErrorData> HApps.Web.Error
 bool HApps.Web.IsPortalSite()
@@ -94,8 +94,8 @@ Awaited WebGL and mobile operations also provide `CancellationToken` overloads. 
 
 Your WebGL page must:
 
-- load `https://cdn.hooli.games/sdk/1.1.0/hooligapps.js`
-- use the JS SDK `1.1.0` contract; unversioned builds are not supported by Unity SDK `3.3.0-preview.2`
+- load `https://cdn.hooli.games/sdk/1.1.2/hooligapps.js`
+- use the JS SDK `1.1.2` contract; unversioned builds are not supported by Unity SDK `3.3.0`
 - initialize the core client with `HApps.init(...)`
 - attach Unity with `HApps.unity.attach(...)`
 - use `objectName: "HAppsJSBridge"`
@@ -124,13 +124,13 @@ Embedded portal flow:
 - call `HApps.Web.OpenAgeVerification()` when the game must show portal age verification UI
 - call `HApps.Web.SetFullscreen(enabled)` to switch the portal fullscreen layout
 - call `HApps.Web.OpenExternalUrl(url)` to ask the portal to open an external URL
-- subscribe to `HApps.Web.AuthCompleted` if auth can complete outside the awaited popup flow
+- subscribe to `HApps.Web.AuthCompleted` if auth can complete outside the awaited popup flow; its action is `SignUp`, `Linked`, `Login`, or `Unknown` for missing and unknown values
 - subscribe to `HApps.Web.UserChanged` for profile changes and `HApps.Web.Error` for browser SDK errors
 
 If the connected profile is already verified, `OpenPortalAuthPopup()` returns `true` locally without opening a popup or emitting a new `AuthCompleted` event.
 
-`SetTheaterMode(bool)` is dispatched by JS SDK 1.1.0.
-`SetFullscreen(bool)` is dispatched by JS SDK 1.1.0.
+`SetTheaterMode(bool)` is dispatched by JS SDK 1.1.2.
+`SetFullscreen(bool)` is dispatched by JS SDK 1.1.2.
 
 Example subscription:
 
@@ -145,9 +145,9 @@ private void OnDisable()
     HApps.Web.AuthCompleted -= HandleAuthCompleted;
 }
 
-private void HandleAuthCompleted(UserData user, SignatureData signature)
+private void HandleAuthCompleted(UserData user, SignatureData signature, AuthAction action)
 {
-    Debug.Log($"auth_complete: {user?.userId}");
+    Debug.Log($"auth_complete: {action}, {user?.userId}");
 }
 ```
 

@@ -1,4 +1,4 @@
-# HApps Android Auth Tab 0.1.0-preview.1
+# HApps Android Auth Tab 0.1.0
 
 Optional Android Auth Tab support for HApps SDK. Install this package only when the project's Android build toolchain can consume `androidx.browser:browser:1.9.0`.
 
@@ -18,8 +18,8 @@ Use the same git release tag for both packages:
 ```json
 {
   "dependencies": {
-    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.3.0-preview.2",
-    "com.happs.sdk.browser-auth-tab": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/Integrations/com.happs.sdk.browser-auth-tab#v3.3.0-preview.2",
+    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.3.0",
+    "com.happs.sdk.browser-auth-tab": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/Integrations/com.happs.sdk.browser-auth-tab#v3.3.0",
     "com.google.external-dependency-manager": "https://github.com/googlesamples/unity-jar-resolver.git?path=upm#v1.2.188"
   }
 }

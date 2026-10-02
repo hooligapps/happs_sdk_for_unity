@@ -8,9 +8,9 @@ namespace HAppsSDK
 {
     public sealed class HAppsWebProvider : HAppsProvider
     {
-        public const string Version = "3.2.0";
+        public const string Version = "3.3.0";
 
-        public event Action<UserData, SignatureData> AuthCompleted;
+        public event Action<UserData, SignatureData, AuthAction> AuthCompleted;
         public event Action<UserData> UserChanged;
         public event Action<HAppsErrorData> Error;
         public string Signature { get; private set; }
@@ -219,9 +219,9 @@ namespace HAppsSDK
             return HAppsJSBridge.IsReady();
         }
 
-        private void RaiseAuthCompleted(UserData user, SignatureData signature)
+        private void RaiseAuthCompleted(UserData user, SignatureData signature, AuthAction action)
         {
-            HAppsEvents.Invoke(AuthCompleted, user, signature);
+            HAppsEvents.Invoke(AuthCompleted, user, signature, action);
         }
 
         private Task<T> StartOperation<T>(OperationType type, Action startAction, int? timeoutMs, CancellationToken cancellationToken)
@@ -352,7 +352,7 @@ namespace HAppsSDK
             Complete(OperationType.OpenAuthPopup, authPopupData);
         }
 
-        private void HandlePortalAuthCompleted(UserData user, SignatureData signature)
+        private void HandlePortalAuthCompleted(UserData user, SignatureData signature, AuthAction action)
         {
             if (user != null)
             {
@@ -366,7 +366,7 @@ namespace HAppsSDK
                 Signature = sig;
 
             Complete(OperationType.OpenPortalAuth, !string.IsNullOrEmpty(sig));
-            RaiseAuthCompleted(user, signature);
+            RaiseAuthCompleted(user, signature, action);
         }
 
         private void HandleUserChanged(UserData user)

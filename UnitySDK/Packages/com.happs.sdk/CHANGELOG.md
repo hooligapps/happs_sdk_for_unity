@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.3.0
+
+- Add `AuthAction` to the WebGL `AuthCompleted` event for the optional `auth_complete.action` field
+- Update the supported browser contract and integration examples to HApps JS SDK 1.1.2
+
 ## 3.3.0-preview.2
 
 - Resolve AndroidX Browser 1.8.0 from the core package for compatibility with the default Unity 2022.3 Android toolchain

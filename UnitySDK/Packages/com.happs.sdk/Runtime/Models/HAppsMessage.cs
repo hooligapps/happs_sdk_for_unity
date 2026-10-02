@@ -6,6 +6,7 @@ namespace HAppsSDK
 	public class HAppsMessage
 	{
 		public string type;
+		public string action;
 		public HAppsErrorData error;
 
 		public InitData initData;
@@ -13,6 +14,8 @@ namespace HAppsSDK
 		public SignatureData signatureData;
 		public PaymentData paymentData;
 		public AuthPopupData authPopupData;
+
+		public AuthAction Action => AuthActionParser.Parse(action);
 	}
 
 	[Serializable]

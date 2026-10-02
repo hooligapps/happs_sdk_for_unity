@@ -11,7 +11,7 @@ namespace HAppsSDK
         public event Action<PaymentData> OnPaymentCreated;
         public event Action<PaymentData> OnPaymentCompleted;
         public event Action<AuthPopupData> OnAuthPopupCompleted;
-        public event Action<UserData, SignatureData> OnPortalAuthCompleted;
+        public event Action<UserData, SignatureData, AuthAction> OnPortalAuthCompleted;
         public event Action<UserData> OnUserChanged;
         public event Action<HAppsErrorData> OnError;
         internal event Action<double> Tick;
@@ -69,7 +69,7 @@ namespace HAppsSDK
                     break;
 
                 case "auth_complete":
-                    OnPortalAuthCompleted?.Invoke(msg.userData, msg.signatureData);
+                    OnPortalAuthCompleted?.Invoke(msg.userData, msg.signatureData, msg.Action);
                     break;
 
                 case "user_changed":
