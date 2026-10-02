@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.4.0
+
+- Return `WebAuthResult` from `OpenPortalAuthPopup()` and pass the same result type to `AuthCompleted`
+
 ## 3.3.0
 
 - Add `AuthAction` to the WebGL `AuthCompleted` event for the optional `auth_complete.action` field

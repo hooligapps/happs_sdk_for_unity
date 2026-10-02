@@ -1,6 +1,6 @@
 # HApps Unity SDK
 
-Unity SDK 3.3.0 for HApps WebGL integrations through JS SDK 1.1.2 and native Android integrations. Optional Android attribution is available through the separate [AppsFlyer integration package](Integrations/com.happs.sdk.appsflyer/README.md), which includes the official AppsFlyer Unity SDK 6.18.1.
+Unity SDK 3.4.0 for HApps WebGL integrations through JS SDK 1.1.2 and native Android integrations. Optional Android attribution is available through the separate [AppsFlyer integration package](Integrations/com.happs.sdk.appsflyer/README.md), which includes the official AppsFlyer Unity SDK 6.18.1.
 
 ## Installation
 
@@ -9,7 +9,7 @@ Add the package to your Unity project through `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.3.0",
+    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.4.0",
     "com.google.external-dependency-manager": "https://github.com/googlesamples/unity-jar-resolver.git?path=upm#v1.2.188"
   }
 }
@@ -22,6 +22,8 @@ The SDK is distributed as a Unity package from:
 The core package uses AndroidX Browser 1.8.0 and supports the default Unity 2022.3 Android toolchain. Unity 6 projects can add the optional [Android Auth Tab package](Integrations/com.happs.sdk.browser-auth-tab/README.md) to use Browser 1.9.0 and automatically close the payment browser on the verified callback.
 
 Upgrading an existing WebGL integration from SDK 2.0.6: see [WebGL Migration: 2.0.6 to 3.1.1](UnitySDK/Packages/com.happs.sdk/MIGRATION_WEB_2.0.6_TO_3.1.1.md).
+
+Upgrading a WebGL integration from SDK 3.3.0: see [WebGL Migration: 3.3.0 to 3.4.0](UnitySDK/Packages/com.happs.sdk/MIGRATION_WEB_3.3.0_TO_3.4.0.md).
 
 Upgrading an existing Android project from SDK 3.1.2 and optionally enabling AppsFlyer: see [Mobile Migration: 3.1.2 to 3.2.0](UnitySDK/Packages/com.happs.sdk/MIGRATION_MOBILE_3.1.2_TO_3.2.0.md).
 
@@ -42,12 +44,12 @@ Task<bool> HApps.Web.Connect()
 Task<UserData> HApps.Web.GetProfile()
 Task<PaymentData> HApps.Web.MakePayment(string orderId)
 Task<AuthPopupData> HApps.Web.OpenIdpAuthPopup(string url)
-Task<bool> HApps.Web.OpenPortalAuthPopup()
+Task<WebAuthResult> HApps.Web.OpenPortalAuthPopup()
 void HApps.Web.OpenAgeVerification(bool adultMode = true)
 void HApps.Web.SetFullscreen(bool enabled)
 void HApps.Web.SetTheaterMode(bool enabled)
 void HApps.Web.OpenExternalUrl(string url)
-event Action<UserData, SignatureData, AuthAction> HApps.Web.AuthCompleted
+event Action<WebAuthResult> HApps.Web.AuthCompleted
 event Action<UserData> HApps.Web.UserChanged
 event Action<HAppsErrorData> HApps.Web.Error
 bool HApps.Web.IsPortalSite()
@@ -74,12 +76,12 @@ Method semantics:
 - `HApps.Web.GetProfile()` requests the current user profile from the platform.
 - `HApps.Web.MakePayment(orderId)` starts a payment flow for an already created backend order.
 - `HApps.Web.OpenIdpAuthPopup(url)` opens standalone backend auth popup and returns `AuthPopupData` for either ticket-based or cookie-based session auth.
-- `HApps.Web.OpenPortalAuthPopup()` opens portal-managed auth UI and returns `true` when portal auth completes successfully. If the connected profile is already verified, it returns `true` locally without opening a popup or emitting a new `AuthCompleted` event.
+- `HApps.Web.OpenPortalAuthPopup()` opens portal-managed auth UI and returns `WebAuthResult`. If the connected profile is already verified, it returns a successful result with `Action == Unknown` locally without opening a popup or emitting a new `AuthCompleted` event.
 - `HApps.Web.OpenAgeVerification(adultMode)` opens portal-managed age verification UI from the game.
 - `HApps.Web.SetFullscreen(enabled)` sends the fullscreen request through JS SDK 1.1.2.
 - `HApps.Web.SetTheaterMode(enabled)` sends the theater-mode request through JS SDK 1.1.2.
 - `HApps.Web.OpenExternalUrl(url)` asks JS SDK 1.1.2 and the portal to open the URL externally.
-- `HApps.Web.AuthCompleted` fires when the external page script sends `auth_complete`, even if you are not awaiting `OpenPortalAuthPopup()`. Its action is `SignUp`, `Linked`, `Login`, or `Unknown` for older portals and unknown values.
+- `HApps.Web.AuthCompleted` fires with `WebAuthResult` when the external page script sends `auth_complete`, even if you are not awaiting `OpenPortalAuthPopup()`.
 - `HApps.Web.UserChanged` fires on JS SDK `user_changed` and updates `HApps.Web.CurrentUser` first.
 - `HApps.Web.Error` exposes errors reported by the JS SDK. These errors are not correlated with a specific pending operation.
 - `HApps.Web.IsPortalSite()` reflects `window.HApps.isPortal()` from the JS environment.
@@ -336,8 +338,8 @@ var profile = await HApps.Web.GetProfile();
 Interactive portal login from inside the game is a separate flow:
 
 ```csharp
-var portalAuthOk = await HApps.Web.OpenPortalAuthPopup();
-if (!portalAuthOk)
+var result = await HApps.Web.OpenPortalAuthPopup();
+if (!result.IsSuccess)
 {
     // Handle portal auth failure.
     return;
@@ -345,7 +347,7 @@ if (!portalAuthOk)
 
 var authResponse = await Gateway.Post("/api/auth/portal", new
 {
-    signature = HApps.Web.Signature
+    signature = result.Signature?.signature
 });
 ```
 
@@ -362,9 +364,9 @@ private void OnDisable()
     HApps.Web.AuthCompleted -= HandleAuthCompleted;
 }
 
-private void HandleAuthCompleted(UserData user, SignatureData signature, AuthAction action)
+private void HandleAuthCompleted(WebAuthResult result)
 {
-    Debug.Log($"auth_complete: {action}, {user?.userId}");
+    Debug.Log($"auth_complete: {result.Action}, {result.User?.userId}");
 }
 ```
 
@@ -374,7 +376,7 @@ private void HandleAuthCompleted(UserData user, SignatureData signature, AuthAct
 - `Connect()` gives Unity access to platform-side context and stores portal signature in `HApps.Web.Signature`.
 - your game backend should use that signature to resolve the authenticated user/session on the server side
 - `OpenPortalAuthPopup()` is the public auth entrypoint for showing portal login UI from the game
-- if the connected profile is already verified, `OpenPortalAuthPopup()` returns `true` locally and does not emit a new `AuthCompleted` event
+- if the connected profile is already verified, `OpenPortalAuthPopup()` returns a successful `WebAuthResult` with `Action == Unknown` locally and does not emit a new `AuthCompleted` event
 - `GetProfile()` should be called after connection and, if needed by your flow, after portal auth completes
 - `IsPortalSite()` depends on `window.HApps.isPortal()`. It is an environment signal, not a user-profile fetch.
 
@@ -397,10 +399,10 @@ Use this when auth is handled by your backend.
 Use this when auth is handled by the portal.
 
 - input: no parameters
-- result: `bool`
+- result: `WebAuthResult` containing `IsSuccess`, `User`, `Signature`, and `Action`
 - follow-up: after success, the portal auth popup completes and updated profile/signature data become available through the SDK flow
 - typical use: call your backend again with the updated `HApps.Web.Signature`
-- already verified profile: returns `true` locally without a popup or a new `AuthCompleted` event
+- already verified profile: returns a successful result with `Action == Unknown` locally without a popup or a new `AuthCompleted` event
 
 ## Portal Auth Flow
 
@@ -528,4 +530,4 @@ Expected response shape:
 
 ## Version
 
-HApps Unity SDK - Integration Guide v3.3.0 (JS SDK 1.1.2)
+HApps Unity SDK - Integration Guide v3.4.0 (JS SDK 1.1.2)

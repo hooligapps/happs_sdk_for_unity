@@ -19,7 +19,7 @@ namespace HAppsSDK
 		public virtual Task<AuthPopupData> OpenIdpAuthPopup(string url)
 			=> throw new NotSupportedException("OpenIdpAuthPopup is not supported by this provider.");
 
-		public virtual Task<bool> OpenPortalAuthPopup()
+		public virtual Task<WebAuthResult> OpenPortalAuthPopup()
 			=> throw new NotSupportedException("OpenPortalAuthPopup is not supported by this provider.");
 
 		public virtual void OpenAgeVerification(bool adultMode = true) { }

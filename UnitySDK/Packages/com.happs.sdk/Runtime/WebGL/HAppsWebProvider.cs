@@ -8,9 +8,9 @@ namespace HAppsSDK
 {
     public sealed class HAppsWebProvider : HAppsProvider
     {
-        public const string Version = "3.3.0";
+        public const string Version = "3.4.0";
 
-        public event Action<UserData, SignatureData, AuthAction> AuthCompleted;
+        public event Action<WebAuthResult> AuthCompleted;
         public event Action<UserData> UserChanged;
         public event Action<HAppsErrorData> Error;
         public string Signature { get; private set; }
@@ -106,18 +106,22 @@ namespace HAppsSDK
                 INTERACTIVE_TIMEOUT_MS, cancellationToken);
         }
 
-        public override Task<bool> OpenPortalAuthPopup() => OpenPortalAuthPopup(CancellationToken.None);
+        public override Task<WebAuthResult> OpenPortalAuthPopup() => OpenPortalAuthPopup(CancellationToken.None);
 
-        public Task<bool> OpenPortalAuthPopup(CancellationToken cancellationToken)
+        public Task<WebAuthResult> OpenPortalAuthPopup(CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (_disposed)
                 throw new ObjectDisposedException(nameof(HAppsWebProvider));
 
             if (_userData?.verified == true)
-                return Task.FromResult(true);
+                return Task.FromResult(new WebAuthResult(
+                    true,
+                    _userData,
+                    string.IsNullOrEmpty(Signature) ? null : new SignatureData { signature = Signature },
+                    AuthAction.Unknown));
 
-            return StartOperation<bool>(
+            return StartOperation<WebAuthResult>(
                 OperationType.OpenPortalAuth,
                 () => _bridge.SendMessage("portal_auth", "{}"),
                 INTERACTIVE_TIMEOUT_MS, cancellationToken);
@@ -219,9 +223,9 @@ namespace HAppsSDK
             return HAppsJSBridge.IsReady();
         }
 
-        private void RaiseAuthCompleted(UserData user, SignatureData signature, AuthAction action)
+        private void RaiseAuthCompleted(WebAuthResult result)
         {
-            HAppsEvents.Invoke(AuthCompleted, user, signature, action);
+            HAppsEvents.Invoke(AuthCompleted, result);
         }
 
         private Task<T> StartOperation<T>(OperationType type, Action startAction, int? timeoutMs, CancellationToken cancellationToken)
@@ -365,8 +369,14 @@ namespace HAppsSDK
             if (!string.IsNullOrEmpty(sig))
                 Signature = sig;
 
-            Complete(OperationType.OpenPortalAuth, !string.IsNullOrEmpty(sig));
-            RaiseAuthCompleted(user, signature, action);
+            var result = new WebAuthResult(
+                !string.IsNullOrEmpty(sig),
+                user,
+                signature,
+                action);
+
+            Complete(OperationType.OpenPortalAuth, result);
+            RaiseAuthCompleted(result);
         }
 
         private void HandleUserChanged(UserData user)

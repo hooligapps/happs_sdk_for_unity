@@ -38,8 +38,8 @@ public sealed class HAppsSample : MonoBehaviour
     {
         try
         {
-            var authOk = await HApps.Web.OpenPortalAuthPopup();
-            LogStatus($"Portal auth: {authOk}");
+            var result = await HApps.Web.OpenPortalAuthPopup();
+            LogStatus($"Portal auth: {result.IsSuccess}, action: {result.Action}");
         }
         catch (Exception ex)
         {

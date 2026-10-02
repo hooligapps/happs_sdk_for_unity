@@ -307,9 +307,9 @@ public sealed class HAppsMobileSample : MonoBehaviour
         return _isConfigured;
     }
 
-    private void HandleWebAuthCompleted(UserData user, SignatureData signature, AuthAction action)
+    private void HandleWebAuthCompleted(WebAuthResult result)
     {
-        Debug.Log($"[HAppsMobileSample] Web auth event: {action}, {user?.userId}, {signature?.signature}");
+        Debug.Log($"[HAppsMobileSample] Web auth event: {result.Action}, {result.User?.userId}, {result.Signature?.signature}");
     }
 
     private void HandleUnityLog(string condition, string stackTrace, LogType type)

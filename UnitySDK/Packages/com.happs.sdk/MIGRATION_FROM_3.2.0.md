@@ -99,7 +99,7 @@ The core SDK resolves `androidx.browser:browser:1.8.0` for compatibility with th
 Unity 6 projects with Android Gradle Plugin 8.1 or newer can add the optional Auth Tab package using the same release tag:
 
 ```json
-"com.happs.sdk.browser-auth-tab": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/Integrations/com.happs.sdk.browser-auth-tab#v3.3.0"
+"com.happs.sdk.browser-auth-tab": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/Integrations/com.happs.sdk.browser-auth-tab#v3.4.0"
 ```
 
 It upgrades AndroidX Browser to 1.9.0. Payment then uses Auth Tab when the browser supports it: reaching the configured callback host and path closes the browser surface and returns to the game without an `intent://` timer or confirmation dialog. The callback query string does not affect matching. Do not install this package with the default Unity 2022.3 Gradle 7.2 and Android Gradle Plugin 7.1.2 toolchain.
@@ -202,12 +202,21 @@ Install the SDK through Unity Package Manager. Remove an old imported `HAppsSDK.
 
 ## 8. Update WebGL authentication handling
 
-WebGL projects must load HApps JS SDK `1.1.2` and update `AuthCompleted` handlers to accept the authentication action:
+WebGL projects must load HApps JS SDK `1.1.2`. `OpenPortalAuthPopup()` and `AuthCompleted` now use the same `WebAuthResult` type:
 
 ```csharp
-private void HandleAuthCompleted(UserData user, SignatureData signature, AuthAction action)
+private async Task OpenPortalAuthAsync()
 {
-    switch (action)
+    var result = await HApps.Web.OpenPortalAuthPopup();
+    if (!result.IsSuccess)
+        return;
+
+    Debug.Log($"Portal auth: {result.Action}, {result.User?.userId}");
+}
+
+private void HandleAuthCompleted(WebAuthResult result)
+{
+    switch (result.Action)
     {
         case AuthAction.SignUp:
         case AuthAction.Linked:

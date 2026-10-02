@@ -1,6 +1,6 @@
 # HApps Unity SDK
 
-Unity SDK 3.3.0 for HApps WebGL integrations through JS SDK 1.1.2 and native Android integrations.
+Unity SDK 3.4.0 for HApps WebGL integrations through JS SDK 1.1.2 and native Android integrations.
 Optional mobile attribution is provided by the separate [AppsFlyer adapter](../../../Integrations/com.happs.sdk.appsflyer/README.md), which is not a dependency of this package.
 
 ## Installation
@@ -10,19 +10,21 @@ Add the package to your Unity project through `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.3.0",
+    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.4.0",
     "com.google.external-dependency-manager": "https://github.com/googlesamples/unity-jar-resolver.git?path=upm#v1.2.188"
   }
 }
 ```
 
-Use the release tag `v3.3.0`.
+Use the release tag `v3.4.0`.
 
 Run `Assets > External Dependency Manager > Android Resolver > Force Resolve` for Android builds.
 
 The core package resolves AndroidX Browser 1.8.0 so it builds with the default Unity 2022.3 Android toolchain. It uses Custom Tabs for authentication, logout and payment. Unity 6 projects with Android Gradle Plugin 8.1 or newer can add the optional [HApps Android Auth Tab package](../../../Integrations/com.happs.sdk.browser-auth-tab/README.md). That package upgrades Browser to 1.9.0; the SDK then uses Auth Tab for payment and falls back to a Custom Tab when the browser does not support it.
 
 For an existing WebGL project, follow [WebGL Migration: SDK 2.0.6 to 3.1.1](MIGRATION_WEB_2.0.6_TO_3.1.1.md).
+
+For a WebGL project updating from SDK 3.3.0, follow [WebGL Migration: SDK 3.3.0 to 3.4.0](MIGRATION_WEB_3.3.0_TO_3.4.0.md).
 
 For native Android integration, follow [Mobile Integration](MOBILE_INTEGRATION.md).
 
@@ -37,12 +39,12 @@ Task<bool> HApps.Web.Connect()
 Task<UserData> HApps.Web.GetProfile()
 Task<PaymentData> HApps.Web.MakePayment(string orderId)
 Task<AuthPopupData> HApps.Web.OpenIdpAuthPopup(string url)
-Task<bool> HApps.Web.OpenPortalAuthPopup()
+Task<WebAuthResult> HApps.Web.OpenPortalAuthPopup()
 void HApps.Web.OpenAgeVerification(bool adultMode = true)
 void HApps.Web.SetFullscreen(bool enabled)
 void HApps.Web.SetTheaterMode(bool enabled)
 void HApps.Web.OpenExternalUrl(string url)
-event Action<UserData, SignatureData, AuthAction> HApps.Web.AuthCompleted
+event Action<WebAuthResult> HApps.Web.AuthCompleted
 event Action<UserData> HApps.Web.UserChanged
 event Action<HAppsErrorData> HApps.Web.Error
 bool HApps.Web.IsPortalSite()
@@ -95,7 +97,7 @@ Awaited WebGL and mobile operations also provide `CancellationToken` overloads. 
 Your WebGL page must:
 
 - load `https://cdn.hooli.games/sdk/1.1.2/hooligapps.js`
-- use the JS SDK `1.1.2` contract; unversioned builds are not supported by Unity SDK `3.3.0`
+- use the JS SDK `1.1.2` contract; unversioned builds are not supported by Unity SDK `3.4.0`
 - initialize the core client with `HApps.init(...)`
 - attach Unity with `HApps.unity.attach(...)`
 - use `objectName: "HAppsJSBridge"`
@@ -124,10 +126,10 @@ Embedded portal flow:
 - call `HApps.Web.OpenAgeVerification()` when the game must show portal age verification UI
 - call `HApps.Web.SetFullscreen(enabled)` to switch the portal fullscreen layout
 - call `HApps.Web.OpenExternalUrl(url)` to ask the portal to open an external URL
-- subscribe to `HApps.Web.AuthCompleted` if auth can complete outside the awaited popup flow; its action is `SignUp`, `Linked`, `Login`, or `Unknown` for missing and unknown values
+- subscribe to `HApps.Web.AuthCompleted` if auth can complete outside the awaited popup flow; `WebAuthResult.Action` is `SignUp`, `Linked`, `Login`, or `Unknown` for missing and unknown values
 - subscribe to `HApps.Web.UserChanged` for profile changes and `HApps.Web.Error` for browser SDK errors
 
-If the connected profile is already verified, `OpenPortalAuthPopup()` returns `true` locally without opening a popup or emitting a new `AuthCompleted` event.
+If the connected profile is already verified, `OpenPortalAuthPopup()` returns a successful `WebAuthResult` with `Action == Unknown` locally without opening a popup or emitting a new `AuthCompleted` event.
 
 `SetTheaterMode(bool)` is dispatched by JS SDK 1.1.2.
 `SetFullscreen(bool)` is dispatched by JS SDK 1.1.2.
@@ -145,9 +147,9 @@ private void OnDisable()
     HApps.Web.AuthCompleted -= HandleAuthCompleted;
 }
 
-private void HandleAuthCompleted(UserData user, SignatureData signature, AuthAction action)
+private void HandleAuthCompleted(WebAuthResult result)
 {
-    Debug.Log($"auth_complete: {action}, {user?.userId}");
+    Debug.Log($"auth_complete: {result.Action}, {result.User?.userId}");
 }
 ```
 

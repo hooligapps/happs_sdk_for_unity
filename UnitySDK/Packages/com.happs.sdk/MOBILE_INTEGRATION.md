@@ -6,7 +6,7 @@ Changes to configuration, cancellation, session events and exceptions are docume
 
 ## 1. Requirements and environments
 
-- HApps Unity SDK `3.3.0`.
+- HApps Unity SDK `3.4.0`.
 - Android API 23 or newer.
 - iOS is not supported.
 
@@ -36,7 +36,7 @@ Add the package to `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.3.0",
+    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.4.0",
     "com.google.external-dependency-manager": "https://github.com/googlesamples/unity-jar-resolver.git?path=upm#v1.2.188"
   }
 }
@@ -47,7 +47,7 @@ Run `Assets > External Dependency Manager > Android Resolver > Force Resolve` af
 The core package resolves AndroidX Browser 1.8.0 and supports the default Unity 2022.3 Android toolchain. It opens authentication, logout and payment in Custom Tabs. Unity 6 projects with Android Gradle Plugin 8.1 or newer can add Auth Tab payment returns with the optional package:
 
 ```json
-"com.happs.sdk.browser-auth-tab": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/Integrations/com.happs.sdk.browser-auth-tab#v3.3.0"
+"com.happs.sdk.browser-auth-tab": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/Integrations/com.happs.sdk.browser-auth-tab#v3.4.0"
 ```
 
 The optional package upgrades AndroidX Browser to 1.9.0. Re-run Force Resolve after adding or removing it. Do not install it in a Unity 2022.3 project that uses the default Gradle 7.2 and Android Gradle Plugin 7.1.2 toolchain.
