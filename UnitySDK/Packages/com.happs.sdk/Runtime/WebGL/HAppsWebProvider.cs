@@ -8,9 +8,10 @@ namespace HAppsSDK
 {
     public sealed class HAppsWebProvider : HAppsProvider
     {
-        public const string Version = "3.4.0";
+        public const string Version = "3.5.0";
 
         public event Action<WebAuthResult> AuthCompleted;
+        public event Action<bool> AgeVerificationCompleted;
         public event Action<UserData> UserChanged;
         public event Action<HAppsErrorData> Error;
         public string Signature { get; private set; }
@@ -50,6 +51,7 @@ namespace HAppsSDK
             _bridge.OnPaymentCompleted += HandlePaymentCompleted;
             _bridge.OnAuthPopupCompleted += HandleAuthPopupCompleted;
             _bridge.OnPortalAuthCompleted += HandlePortalAuthCompleted;
+            _bridge.OnAgeVerificationCompleted += HandleAgeVerificationCompleted;
             _bridge.OnUserChanged += HandleUserChanged;
             _bridge.OnError += HandleError;
 
@@ -93,12 +95,28 @@ namespace HAppsSDK
                 INTERACTIVE_TIMEOUT_MS, cancellationToken);
         }
 
-        public override Task<AuthPopupData> OpenIdpAuthPopup(string url) => OpenIdpAuthPopup(url, CancellationToken.None);
+        public override Task<AuthPopupData> OpenIdpAuthPopup(string url) =>
+            OpenIdpAuthPopup(url, null, CancellationToken.None);
 
-        public Task<AuthPopupData> OpenIdpAuthPopup(string url, CancellationToken cancellationToken)
+        public Task<AuthPopupData> OpenIdpAuthPopup(string url, string callbackOrigin) =>
+            OpenIdpAuthPopup(url, callbackOrigin, CancellationToken.None);
+
+        public Task<AuthPopupData> OpenIdpAuthPopup(string url, CancellationToken cancellationToken) =>
+            OpenIdpAuthPopup(url, null, cancellationToken);
+
+        public Task<AuthPopupData> OpenIdpAuthPopup(
+            string url,
+            string callbackOrigin,
+            CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var json = JsonUtility.ToJson(new OpenAuthPopupRequest { url = url });
+            var json = string.IsNullOrWhiteSpace(callbackOrigin)
+                ? JsonUtility.ToJson(new OpenAuthPopupRequest { url = url })
+                : JsonUtility.ToJson(new OpenAuthPopupWithOriginRequest
+                {
+                    url = url,
+                    callbackOrigin = callbackOrigin.Trim()
+                });
 
             return StartOperation<AuthPopupData>(
                 OperationType.OpenAuthPopup,
@@ -127,15 +145,10 @@ namespace HAppsSDK
                 INTERACTIVE_TIMEOUT_MS, cancellationToken);
         }
 
-        public override void OpenAgeVerification(bool adultMode = true)
+        public override void OpenAgeVerification()
         {
             if (_disposed) throw new ObjectDisposedException(nameof(HAppsWebProvider));
-            var json = JsonUtility.ToJson(new OpenAgeVerificationRequest
-            {
-                adultMode = adultMode
-            });
-
-            _bridge.SendMessage("open_age_verification", json);
+            _bridge.SendMessage("open_age_verification", "{}");
         }
 
         public override void SetTheaterMode(bool enabled)
@@ -193,6 +206,7 @@ namespace HAppsSDK
                 _bridge.OnPaymentCompleted -= HandlePaymentCompleted;
                 _bridge.OnAuthPopupCompleted -= HandleAuthPopupCompleted;
                 _bridge.OnPortalAuthCompleted -= HandlePortalAuthCompleted;
+                _bridge.OnAgeVerificationCompleted -= HandleAgeVerificationCompleted;
                 _bridge.OnUserChanged -= HandleUserChanged;
                 _bridge.OnError -= HandleError;
             }
@@ -392,6 +406,11 @@ namespace HAppsSDK
             HAppsEvents.Invoke(UserChanged, user);
         }
 
+        private void HandleAgeVerificationCompleted(bool confirmed)
+        {
+            HAppsEvents.Invoke(AgeVerificationCompleted, confirmed);
+        }
+
         private void HandleError(HAppsErrorData error)
         {
             if (error == null)
@@ -405,9 +424,10 @@ namespace HAppsSDK
         }
 
         [Serializable]
-        private sealed class OpenAgeVerificationRequest
+        private sealed class OpenAuthPopupWithOriginRequest
         {
-            public bool adultMode = true;
+            public string url;
+            public string callbackOrigin;
         }
 
         [Serializable]

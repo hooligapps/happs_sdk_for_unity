@@ -7,6 +7,7 @@ namespace HAppsSDK
 	{
 		public string flow;
 		public string ticket;
+		public string payloadJson;
 
 		public AuthPopupFlow Flow
 		{

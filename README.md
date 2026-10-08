@@ -1,6 +1,6 @@
 # HApps Unity SDK
 
-Unity SDK 3.4.0 for HApps WebGL integrations through JS SDK 1.1.2 and native Android integrations. Optional Android attribution is available through the separate [AppsFlyer integration package](Integrations/com.happs.sdk.appsflyer/README.md), which includes the official AppsFlyer Unity SDK 6.18.1.
+Unity SDK 3.5.0 for HApps WebGL integrations through JS SDK 1.1.2 and native Android integrations. Optional Android attribution is available through the separate [AppsFlyer integration package](Integrations/com.happs.sdk.appsflyer/README.md), which includes the official AppsFlyer Unity SDK 6.18.1.
 
 ## Installation
 
@@ -9,7 +9,7 @@ Add the package to your Unity project through `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.4.0",
+    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.5.0",
     "com.google.external-dependency-manager": "https://github.com/googlesamples/unity-jar-resolver.git?path=upm#v1.2.188"
   }
 }
@@ -23,7 +23,7 @@ The core package uses AndroidX Browser 1.8.0 and supports the default Unity 2022
 
 Upgrading an existing WebGL integration from SDK 2.0.6: see [WebGL Migration: 2.0.6 to 3.1.1](UnitySDK/Packages/com.happs.sdk/MIGRATION_WEB_2.0.6_TO_3.1.1.md).
 
-Upgrading a WebGL integration from SDK 3.3.0: see [WebGL Migration: 3.3.0 to 3.4.0](UnitySDK/Packages/com.happs.sdk/MIGRATION_WEB_3.3.0_TO_3.4.0.md).
+Upgrading a WebGL integration from SDK 3.4.0: see [WebGL Migration: 3.4.0 to 3.5.0](UnitySDK/Packages/com.happs.sdk/MIGRATION_WEB_3.4.0_TO_3.5.0.md).
 
 Upgrading an existing Android project from SDK 3.1.2 and optionally enabling AppsFlyer: see [Mobile Migration: 3.1.2 to 3.2.0](UnitySDK/Packages/com.happs.sdk/MIGRATION_MOBILE_3.1.2_TO_3.2.0.md).
 
@@ -44,12 +44,14 @@ Task<bool> HApps.Web.Connect()
 Task<UserData> HApps.Web.GetProfile()
 Task<PaymentData> HApps.Web.MakePayment(string orderId)
 Task<AuthPopupData> HApps.Web.OpenIdpAuthPopup(string url)
+Task<AuthPopupData> HApps.Web.OpenIdpAuthPopup(string url, string callbackOrigin)
 Task<WebAuthResult> HApps.Web.OpenPortalAuthPopup()
-void HApps.Web.OpenAgeVerification(bool adultMode = true)
+void HApps.Web.OpenAgeVerification()
 void HApps.Web.SetFullscreen(bool enabled)
 void HApps.Web.SetTheaterMode(bool enabled)
 void HApps.Web.OpenExternalUrl(string url)
 event Action<WebAuthResult> HApps.Web.AuthCompleted
+event Action<bool> HApps.Web.AgeVerificationCompleted
 event Action<UserData> HApps.Web.UserChanged
 event Action<HAppsErrorData> HApps.Web.Error
 bool HApps.Web.IsPortalSite()
@@ -75,13 +77,14 @@ Method semantics:
 - `HApps.Web.Connect()` requests platform data through the initialized browser bridge, stores portal signature on the provider, and waits for the platform connect response.
 - `HApps.Web.GetProfile()` requests the current user profile from the platform.
 - `HApps.Web.MakePayment(orderId)` starts a payment flow for an already created backend order.
-- `HApps.Web.OpenIdpAuthPopup(url)` opens standalone backend auth popup and returns `AuthPopupData` for either ticket-based or cookie-based session auth.
+- `HApps.Web.OpenIdpAuthPopup(url, callbackOrigin)` opens standalone backend auth popup and returns `AuthPopupData` for either ticket-based or cookie-based session auth. `callbackOrigin` is optional and otherwise defaults to the popup URL origin.
 - `HApps.Web.OpenPortalAuthPopup()` opens portal-managed auth UI and returns `WebAuthResult`. If the connected profile is already verified, it returns a successful result with `Action == Unknown` locally without opening a popup or emitting a new `AuthCompleted` event.
-- `HApps.Web.OpenAgeVerification(adultMode)` opens portal-managed age verification UI from the game.
+- `HApps.Web.OpenAgeVerification()` opens portal-managed age verification UI from the game.
 - `HApps.Web.SetFullscreen(enabled)` sends the fullscreen request through JS SDK 1.1.2.
 - `HApps.Web.SetTheaterMode(enabled)` sends the theater-mode request through JS SDK 1.1.2.
 - `HApps.Web.OpenExternalUrl(url)` asks JS SDK 1.1.2 and the portal to open the URL externally.
 - `HApps.Web.AuthCompleted` fires with `WebAuthResult` when the external page script sends `auth_complete`, even if you are not awaiting `OpenPortalAuthPopup()`.
+- `HApps.Web.AgeVerificationCompleted` fires with the `confirmed` flag when the portal completes age verification.
 - `HApps.Web.UserChanged` fires on JS SDK `user_changed` and updates `HApps.Web.CurrentUser` first.
 - `HApps.Web.Error` exposes errors reported by the JS SDK. These errors are not correlated with a specific pending operation.
 - `HApps.Web.IsPortalSite()` reflects `window.HApps.isPortal()` from the JS environment.
@@ -429,6 +432,7 @@ if (profile != null)
 
 `UserData` currently contains:
 
+- `id`
 - `userId`
 - `userName`
 - `verified`
@@ -439,6 +443,7 @@ if (profile != null)
 
 - `flow`
 - `ticket`
+- `payloadJson`: the optional popup payload preserved as raw JSON
 
 Supported `flow` values:
 
@@ -530,4 +535,4 @@ Expected response shape:
 
 ## Version
 
-HApps Unity SDK - Integration Guide v3.4.0 (JS SDK 1.1.2)
+HApps Unity SDK - Integration Guide v3.5.0 (JS SDK 1.1.2)

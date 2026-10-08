@@ -12,6 +12,7 @@ namespace HAppsSDK
         public event Action<PaymentData> OnPaymentCompleted;
         public event Action<AuthPopupData> OnAuthPopupCompleted;
         public event Action<UserData, SignatureData, AuthAction> OnPortalAuthCompleted;
+        public event Action<bool> OnAgeVerificationCompleted;
         public event Action<UserData> OnUserChanged;
         public event Action<HAppsErrorData> OnError;
         internal event Action<double> Tick;
@@ -31,6 +32,16 @@ namespace HAppsSDK
             try
             {
                 msg = JsonUtility.FromJson<HAppsMessage>(json);
+
+                if (msg?.authPopupData != null &&
+                    JsonRawValueExtractor.TryGetNestedProperty(
+                        json,
+                        "authPopupData",
+                        "payload",
+                        out var payloadJson))
+                {
+                    msg.authPopupData.payloadJson = payloadJson;
+                }
             }
             catch (Exception e)
             {
@@ -70,6 +81,10 @@ namespace HAppsSDK
 
                 case "auth_complete":
                     OnPortalAuthCompleted?.Invoke(msg.userData, msg.signatureData, msg.Action);
+                    break;
+
+                case "age_verification_complete":
+                    OnAgeVerificationCompleted?.Invoke(msg.confirmed);
                     break;
 
                 case "user_changed":

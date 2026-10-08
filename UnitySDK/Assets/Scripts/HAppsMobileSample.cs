@@ -50,12 +50,14 @@ public sealed class HAppsMobileSample : MonoBehaviour
     private void OnEnable()
     {
         HApps.Web.AuthCompleted += HandleWebAuthCompleted;
+        HApps.Web.AgeVerificationCompleted += HandleAgeVerificationCompleted;
         Application.logMessageReceived += HandleUnityLog;
     }
 
     private void OnDisable()
     {
         HApps.Web.AuthCompleted -= HandleWebAuthCompleted;
+        HApps.Web.AgeVerificationCompleted -= HandleAgeVerificationCompleted;
         Application.logMessageReceived -= HandleUnityLog;
     }
 
@@ -310,6 +312,11 @@ public sealed class HAppsMobileSample : MonoBehaviour
     private void HandleWebAuthCompleted(WebAuthResult result)
     {
         Debug.Log($"[HAppsMobileSample] Web auth event: {result.Action}, {result.User?.userId}, {result.Signature?.signature}");
+    }
+
+    private void HandleAgeVerificationCompleted(bool confirmed)
+    {
+        Debug.Log($"[HAppsMobileSample] Age verification completed: {confirmed}");
     }
 
     private void HandleUnityLog(string condition, string stackTrace, LogType type)

@@ -7,6 +7,7 @@ namespace HAppsSDK
 	{
 		public string type;
 		public string action;
+		public bool confirmed;
 		public HAppsErrorData error;
 
 		public InitData initData;

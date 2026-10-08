@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.5.0
+
+- Remove the obsolete `adultMode` argument from `HApps.Web.OpenAgeVerification()` to match the JS SDK 1.1.2 portal contract
+- Add `HApps.Web.AgeVerificationCompleted` for the JS SDK `age_verification_complete` event and its `confirmed` flag
+- Add the portal `id` to `UserData`
+- Support the optional IDP popup `callbackOrigin` and preserve its arbitrary payload as `AuthPopupData.payloadJson`
+
 ## 3.4.0
 
 - Return `WebAuthResult` from `OpenPortalAuthPopup()` and pass the same result type to `AuthCompleted`

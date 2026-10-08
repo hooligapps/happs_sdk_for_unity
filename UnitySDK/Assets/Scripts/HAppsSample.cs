@@ -14,12 +14,26 @@ public sealed class HAppsSample : MonoBehaviour
 
     [Header("Debug UI")]
     [SerializeField] private bool showDebugGui = true;
-    [SerializeField] private bool adultMode = true;
     [SerializeField] private bool theaterModeEnabled = true;
 
     private string _lastStatus = "Idle";
     private GUIStyle _titleStyle;
     private GUIStyle _sectionStyle;
+
+    private void OnEnable()
+    {
+        HApps.Web.AgeVerificationCompleted += HandleAgeVerificationCompleted;
+    }
+
+    private void OnDisable()
+    {
+        HApps.Web.AgeVerificationCompleted -= HandleAgeVerificationCompleted;
+    }
+
+    private void HandleAgeVerificationCompleted(bool confirmed)
+    {
+        LogStatus($"Age verification completed: {confirmed}");
+    }
 
     public async void PortalConnect()
     {
@@ -118,8 +132,8 @@ public sealed class HAppsSample : MonoBehaviour
 
     public void ShowAgeVerification()
     {
-        HApps.Web.OpenAgeVerification(adultMode);
-        LogStatus($"Age verification requested: adultMode={adultMode}");
+        HApps.Web.OpenAgeVerification();
+        LogStatus("Age verification requested");
     }
 
     public void ApplyTheaterMode()
@@ -160,7 +174,6 @@ public sealed class HAppsSample : MonoBehaviour
         if (GUILayout.Button("Request Profile", GUILayout.Height(lineHeight)))
             RequestProfile();
 
-        adultMode = GUILayout.Toggle(adultMode, "Adult mode");
         if (GUILayout.Button("Show Age Verification", GUILayout.Height(lineHeight)))
             ShowAgeVerification();
 

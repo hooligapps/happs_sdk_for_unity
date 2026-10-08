@@ -427,7 +427,6 @@ MonoBehaviour:
   launchToken: 
   orderId: 
   showDebugGui: 1
-  adultMode: 1
   theaterModeEnabled: 1
 --- !u!4 &1929340996
 Transform:

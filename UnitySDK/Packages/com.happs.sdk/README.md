@@ -1,6 +1,6 @@
 # HApps Unity SDK
 
-Unity SDK 3.4.0 for HApps WebGL integrations through JS SDK 1.1.2 and native Android integrations.
+Unity SDK 3.5.0 for HApps WebGL integrations through JS SDK 1.1.2 and native Android integrations.
 Optional mobile attribution is provided by the separate [AppsFlyer adapter](../../../Integrations/com.happs.sdk.appsflyer/README.md), which is not a dependency of this package.
 
 ## Installation
@@ -10,13 +10,13 @@ Add the package to your Unity project through `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.4.0",
+    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.5.0",
     "com.google.external-dependency-manager": "https://github.com/googlesamples/unity-jar-resolver.git?path=upm#v1.2.188"
   }
 }
 ```
 
-Use the release tag `v3.4.0`.
+Use the release tag `v3.5.0`.
 
 Run `Assets > External Dependency Manager > Android Resolver > Force Resolve` for Android builds.
 
@@ -24,7 +24,7 @@ The core package resolves AndroidX Browser 1.8.0 so it builds with the default U
 
 For an existing WebGL project, follow [WebGL Migration: SDK 2.0.6 to 3.1.1](MIGRATION_WEB_2.0.6_TO_3.1.1.md).
 
-For a WebGL project updating from SDK 3.3.0, follow [WebGL Migration: SDK 3.3.0 to 3.4.0](MIGRATION_WEB_3.3.0_TO_3.4.0.md).
+For a WebGL project updating from SDK 3.4.0, follow [WebGL Migration: SDK 3.4.0 to 3.5.0](MIGRATION_WEB_3.4.0_TO_3.5.0.md).
 
 For native Android integration, follow [Mobile Integration](MOBILE_INTEGRATION.md).
 
@@ -39,12 +39,14 @@ Task<bool> HApps.Web.Connect()
 Task<UserData> HApps.Web.GetProfile()
 Task<PaymentData> HApps.Web.MakePayment(string orderId)
 Task<AuthPopupData> HApps.Web.OpenIdpAuthPopup(string url)
+Task<AuthPopupData> HApps.Web.OpenIdpAuthPopup(string url, string callbackOrigin)
 Task<WebAuthResult> HApps.Web.OpenPortalAuthPopup()
-void HApps.Web.OpenAgeVerification(bool adultMode = true)
+void HApps.Web.OpenAgeVerification()
 void HApps.Web.SetFullscreen(bool enabled)
 void HApps.Web.SetTheaterMode(bool enabled)
 void HApps.Web.OpenExternalUrl(string url)
 event Action<WebAuthResult> HApps.Web.AuthCompleted
+event Action<bool> HApps.Web.AgeVerificationCompleted
 event Action<UserData> HApps.Web.UserChanged
 event Action<HAppsErrorData> HApps.Web.Error
 bool HApps.Web.IsPortalSite()
@@ -97,7 +99,7 @@ Awaited WebGL and mobile operations also provide `CancellationToken` overloads. 
 Your WebGL page must:
 
 - load `https://cdn.hooli.games/sdk/1.1.2/hooligapps.js`
-- use the JS SDK `1.1.2` contract; unversioned builds are not supported by Unity SDK `3.4.0`
+- use the JS SDK `1.1.2` contract; unversioned builds are not supported by Unity SDK `3.5.0`
 - initialize the core client with `HApps.init(...)`
 - attach Unity with `HApps.unity.attach(...)`
 - use `objectName: "HAppsJSBridge"`
@@ -112,6 +114,7 @@ Set `debug: true` in `HApps.init(...)` when browser-side logging is required. In
 Standalone IDP popup flow:
 
 - use `HApps.Web.OpenIdpAuthPopup(url)`
+- pass `callbackOrigin` when the trusted popup callback has a different origin than its initial URL
 - inspect returned `AuthPopupData`
 - supported results:
   - `ticket`: exchange `ticket` on your backend
@@ -127,6 +130,7 @@ Embedded portal flow:
 - call `HApps.Web.SetFullscreen(enabled)` to switch the portal fullscreen layout
 - call `HApps.Web.OpenExternalUrl(url)` to ask the portal to open an external URL
 - subscribe to `HApps.Web.AuthCompleted` if auth can complete outside the awaited popup flow; `WebAuthResult.Action` is `SignUp`, `Linked`, `Login`, or `Unknown` for missing and unknown values
+- subscribe to `HApps.Web.AgeVerificationCompleted` to receive the portal age-verification `confirmed` flag
 - subscribe to `HApps.Web.UserChanged` for profile changes and `HApps.Web.Error` for browser SDK errors
 
 If the connected profile is already verified, `OpenPortalAuthPopup()` returns a successful `WebAuthResult` with `Action == Unknown` locally without opening a popup or emitting a new `AuthCompleted` event.
@@ -160,7 +164,8 @@ private void HandleAuthCompleted(WebAuthResult result)
 - `OpenIdpAuthPopup(url)` returns `AuthPopupData`, not plain `string`
 - `AuthPopupData` supports both ticket-based and cookie-based session auth
 - `Connect()` and `OpenPortalAuthPopup()` are separate steps
-- `OpenAgeVerification()` is a fire-and-forget bridge call with no completion callback
+- `OpenAgeVerification()` starts the flow; completion is reported through `AgeVerificationCompleted`
+- `AuthPopupData.payloadJson` preserves the optional popup payload as raw JSON
 - `UserChanged` updates `CurrentUser` before invoking subscribers
 - `Error` is not correlated with a specific pending operation
 - `HApps.init(...)` and `HApps.unity.attach(...)` are separate browser-side setup steps

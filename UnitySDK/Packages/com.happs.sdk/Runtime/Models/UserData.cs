@@ -5,13 +5,14 @@ namespace HAppsSDK
 	[Serializable]
 	public class UserData
 	{
+		public string id;
 		public string userId;
 		public string userName;
 		public bool verified;
 
 		public override string ToString()
 		{
-			return $"{userName} ({userId})";
+			return $"{userName} ({userId ?? id})";
 		}
 	}
 }
