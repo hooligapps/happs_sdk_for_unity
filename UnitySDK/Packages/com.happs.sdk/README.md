@@ -1,6 +1,6 @@
 # HApps Unity SDK
 
-Unity SDK 3.5.0 for HApps WebGL integrations through JS SDK 1.1.2 and native Android integrations.
+Unity SDK 3.5.1 for HApps WebGL integrations through JS SDK 1.1.2 and native Android integrations.
 Optional mobile attribution is provided by the separate [AppsFlyer adapter](../../../Integrations/com.happs.sdk.appsflyer/README.md), which is not a dependency of this package.
 
 ## Installation
@@ -10,13 +10,13 @@ Add the package to your Unity project through `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.5.0",
+    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.5.1",
     "com.google.external-dependency-manager": "https://github.com/googlesamples/unity-jar-resolver.git?path=upm#v1.2.188"
   }
 }
 ```
 
-Use the release tag `v3.5.0`.
+Use the release tag `v3.5.1`.
 
 Run `Assets > External Dependency Manager > Android Resolver > Force Resolve` for Android builds.
 
@@ -99,7 +99,7 @@ Awaited WebGL and mobile operations also provide `CancellationToken` overloads. 
 Your WebGL page must:
 
 - load `https://cdn.hooli.games/sdk/1.1.2/hooligapps.js`
-- use the JS SDK `1.1.2` contract; unversioned builds are not supported by Unity SDK `3.5.0`
+- use the JS SDK `1.1.2` contract; unversioned builds are not supported by Unity SDK `3.5.1`
 - initialize the core client with `HApps.init(...)`
 - attach Unity with `HApps.unity.attach(...)`
 - use `objectName: "HAppsJSBridge"`
@@ -125,6 +125,7 @@ Embedded portal flow:
 
 - call `HApps.Web.Connect()` to receive platform context and current portal signature
 - send `HApps.Web.Signature` to your backend if you need server-side user resolution
+- use `UserData.verified` for email verification and `UserData.ageConfirmed` for age confirmation
 - call `HApps.Web.OpenPortalAuthPopup()` when the game must show portal login UI
 - call `HApps.Web.OpenAgeVerification()` when the game must show portal age verification UI
 - call `HApps.Web.SetFullscreen(enabled)` to switch the portal fullscreen layout

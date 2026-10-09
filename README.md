@@ -1,6 +1,6 @@
 # HApps Unity SDK
 
-Unity SDK 3.5.0 for HApps WebGL integrations through JS SDK 1.1.2 and native Android integrations. Optional Android attribution is available through the separate [AppsFlyer integration package](Integrations/com.happs.sdk.appsflyer/README.md), which includes the official AppsFlyer Unity SDK 6.18.1.
+Unity SDK 3.5.1 for HApps WebGL integrations through JS SDK 1.1.2 and native Android integrations. Optional Android attribution is available through the separate [AppsFlyer integration package](Integrations/com.happs.sdk.appsflyer/README.md), which includes the official AppsFlyer Unity SDK 6.18.1.
 
 ## Installation
 
@@ -9,7 +9,7 @@ Add the package to your Unity project through `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.5.0",
+    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.5.1",
     "com.google.external-dependency-manager": "https://github.com/googlesamples/unity-jar-resolver.git?path=upm#v1.2.188"
   }
 }
@@ -435,7 +435,8 @@ if (profile != null)
 - `id`
 - `userId`
 - `userName`
-- `verified`
+- `verified`: whether the email is verified
+- `ageConfirmed`: whether age confirmation is complete
 
 ## AuthPopupData
 
@@ -535,4 +536,4 @@ Expected response shape:
 
 ## Version
 
-HApps Unity SDK - Integration Guide v3.5.0 (JS SDK 1.1.2)
+HApps Unity SDK - Integration Guide v3.5.1 (JS SDK 1.1.2)

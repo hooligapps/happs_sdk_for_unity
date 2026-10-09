@@ -9,6 +9,7 @@ namespace HAppsSDK
 		public string userId;
 		public string userName;
 		public bool verified;
+		public bool ageConfirmed;
 
 		public override string ToString()
 		{

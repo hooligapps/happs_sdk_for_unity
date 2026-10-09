@@ -1,9 +1,9 @@
 {
   "name": "com.happs.sdk.browser-auth-tab",
   "displayName": "HApps Android Auth Tab",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Optional AndroidX Browser 1.9 integration that enables Auth Tab payment returns in HApps SDK.",
   "dependencies": {
-    "com.happs.sdk": "3.5.0"
+    "com.happs.sdk": "3.5.1"
   }
 }

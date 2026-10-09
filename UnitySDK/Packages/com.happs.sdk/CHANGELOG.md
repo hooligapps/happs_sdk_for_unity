@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.5.1
+
+- Add `UserData.ageConfirmed` for the profile age-confirmation state
+
 ## 3.5.0
 
 - Remove the obsolete `adultMode` argument from `HApps.Web.OpenAgeVerification()` to match the JS SDK 1.1.2 portal contract

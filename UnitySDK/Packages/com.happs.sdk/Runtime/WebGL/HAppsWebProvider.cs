@@ -8,7 +8,7 @@ namespace HAppsSDK
 {
     public sealed class HAppsWebProvider : HAppsProvider
     {
-        public const string Version = "3.5.0";
+        public const string Version = "3.5.1";
 
         public event Action<WebAuthResult> AuthCompleted;
         public event Action<bool> AgeVerificationCompleted;
