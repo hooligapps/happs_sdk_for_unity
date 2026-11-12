@@ -28,7 +28,7 @@ namespace HAppsSDK
 		private const string CreatePaymentPath = MobileApiPath + "/payments";
 		private const string CheckUpdatePath = MobileApiPath + "/app/check-update";
 		private static readonly Regex SensitiveJsonFieldRegex = new Regex(
-			"(\\\"(?:adv_id|accessToken|access_token|refreshToken|refresh_token|idToken|id_token|oidcAccessToken|code|codeVerifier|code_verifier|clientSecret|client_secret|signature|devicePrivateKey|privateKey|analyticKey|authorizationUrl|logoutUrl|paymentUrl)\\\"\\s*:\\s*)\\\"(?:\\\\.|[^\\\"\\\\])*\\\"",
+			"(\\\"(?:advId|accessToken|access_token|refreshToken|refresh_token|idToken|id_token|oidcAccessToken|code|codeVerifier|code_verifier|clientSecret|client_secret|signature|devicePrivateKey|privateKey|analyticKey|authorizationUrl|logoutUrl|paymentUrl)\\\"\\s*:\\s*)\\\"(?:\\\\.|[^\\\"\\\\])*\\\"",
 			RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
 
 		private HAppsMobileAuthOptions _options;
@@ -901,7 +901,7 @@ namespace HAppsSDK
                 var completed = await Task.WhenAny(advertisingIdTask, Task.Delay(2000, stateVersion.CancellationToken));
                 ThrowIfStateInvalid(stateVersion);
                 if (completed == advertisingIdTask)
-                    request.adv_id = await advertisingIdTask;
+                    request.advId = await advertisingIdTask;
             }
 #endif
             string customData = null;
@@ -1700,7 +1700,7 @@ namespace HAppsSDK
 		[Serializable]
 		private sealed class RegisterDeviceRequest
         {
-            public string adv_id;
+            public string advId;
             public int versionCode;
             public string deviceModel;
             public string osVersion;

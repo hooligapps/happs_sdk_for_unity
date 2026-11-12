@@ -6,7 +6,7 @@ Changes to configuration, cancellation, session events and exceptions are docume
 
 ## 1. Requirements and environments
 
-Device registration collects the Google Advertising ID as `adv_id` when available and permitted. Set `CollectAdvertisingId = false` in `HAppsMobileAuthOptions` before configuring mobile to disable collection. This setting is independent of AppsFlyer's `CollectAdvertisingIdentifiers`. Registration proceeds without the ID if it is unavailable, restricted, or retrieval takes more than two seconds. The core Android package resolves Google Play services ads identifier and declares the `AD_ID` permission.
+Device registration collects the Google Advertising ID as `advId` when available and permitted. Set `CollectAdvertisingId = false` in `HAppsMobileAuthOptions` before configuring mobile to disable collection. This setting is independent of AppsFlyer's `CollectAdvertisingIdentifiers`. Registration proceeds without the ID if it is unavailable, restricted, or retrieval takes more than two seconds. The core Android package resolves Google Play services ads identifier and declares the `AD_ID` permission.
 
 - HApps Unity SDK `3.6.0-preview.2`.
 - Android API 23 or newer.
