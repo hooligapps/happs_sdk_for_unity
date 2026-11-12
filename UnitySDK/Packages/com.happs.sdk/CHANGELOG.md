@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.6.0-preview.2
+
+- Include the Google Advertising ID in device registration when available and enabled
+
 ## 3.6.0-preview.1
 
 - Send Android device metadata during registration for portal download attribution, without blocking registration if collection fails

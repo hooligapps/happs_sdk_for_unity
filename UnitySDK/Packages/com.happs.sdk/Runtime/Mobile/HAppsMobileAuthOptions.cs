@@ -5,5 +5,6 @@ namespace HAppsSDK
 		public string PortalUrl;
 		public string ClientId;
 		public string CallbackUri;
+		public bool CollectAdvertisingId = true;
 	}
 }

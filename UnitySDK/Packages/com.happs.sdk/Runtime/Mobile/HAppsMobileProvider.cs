@@ -28,7 +28,7 @@ namespace HAppsSDK
 		private const string CreatePaymentPath = MobileApiPath + "/payments";
 		private const string CheckUpdatePath = MobileApiPath + "/app/check-update";
 		private static readonly Regex SensitiveJsonFieldRegex = new Regex(
-			"(\\\"(?:accessToken|access_token|refreshToken|refresh_token|idToken|id_token|oidcAccessToken|code|codeVerifier|code_verifier|clientSecret|client_secret|signature|devicePrivateKey|privateKey|analyticKey|authorizationUrl|logoutUrl|paymentUrl)\\\"\\s*:\\s*)\\\"(?:\\\\.|[^\\\"\\\\])*\\\"",
+			"(\\\"(?:adv_id|accessToken|access_token|refreshToken|refresh_token|idToken|id_token|oidcAccessToken|code|codeVerifier|code_verifier|clientSecret|client_secret|signature|devicePrivateKey|privateKey|analyticKey|authorizationUrl|logoutUrl|paymentUrl)\\\"\\s*:\\s*)\\\"(?:\\\\.|[^\\\"\\\\])*\\\"",
 			RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
 
 		private HAppsMobileAuthOptions _options;
@@ -134,7 +134,8 @@ namespace HAppsSDK
 			{
 				PortalUrl = options.PortalUrl,
 				ClientId = options.ClientId,
-				CallbackUri = options.CallbackUri
+				CallbackUri = options.CallbackUri,
+				CollectAdvertisingId = options.CollectAdvertisingId
 			};
 			_tokenStore = tokenStore ?? CreateDefaultTokenStore(BuildTokenStorageKey(_options));
 			HAppsLog.Log("Mobile configured");
@@ -820,6 +821,29 @@ namespace HAppsSDK
 			return await ApplySessionResponseAsync(tokenSet, response, stateVersion);
 		}
 
+#if UNITY_ANDROID && !UNITY_EDITOR
+		private static string ReadAndroidAdvertisingId()
+		{
+			try
+			{
+				AndroidJNI.AttachCurrentThread();
+				try
+				{
+					using var player = new AndroidJavaClass("com.unity3d.player.UnityPlayer");
+					using var activity = player.GetStatic<AndroidJavaObject>("currentActivity");
+					using var context = activity.Call<AndroidJavaObject>("getApplicationContext");
+					using var client = new AndroidJavaClass("com.google.android.gms.ads.identifier.AdvertisingIdClient");
+					using var info = client.CallStatic<AndroidJavaObject>("getAdvertisingIdInfo", context);
+					if (info == null || info.Call<bool>("isLimitAdTrackingEnabled")) return null;
+					var id = info.Call<string>("getId");
+					return Guid.TryParse(id, out var parsed) && parsed != Guid.Empty ? parsed.ToString() : null;
+				}
+				finally { AndroidJNI.DetachCurrentThread(); }
+			}
+			catch (Exception) { return null; }
+		}
+#endif
+
 		private async Task<MobileTokenSet> EnsureDeviceRegisteredAsync(OperationContext stateVersion)
 		{
 			ThrowIfStateInvalid(stateVersion);
@@ -870,6 +894,14 @@ namespace HAppsSDK
             catch (Exception ex)
             {
                 HAppsLog.Warn($"Unable to collect Android attribution metadata; continuing device registration. errorType={ex.GetType().Name}");
+            }
+            if (_options.CollectAdvertisingId)
+            {
+                var advertisingIdTask = Task.Run(ReadAndroidAdvertisingId);
+                var completed = await Task.WhenAny(advertisingIdTask, Task.Delay(2000, stateVersion.CancellationToken));
+                ThrowIfStateInvalid(stateVersion);
+                if (completed == advertisingIdTask)
+                    request.adv_id = await advertisingIdTask;
             }
 #endif
             string customData = null;
@@ -1668,6 +1700,7 @@ namespace HAppsSDK
 		[Serializable]
 		private sealed class RegisterDeviceRequest
         {
+            public string adv_id;
             public int versionCode;
             public string deviceModel;
             public string osVersion;
