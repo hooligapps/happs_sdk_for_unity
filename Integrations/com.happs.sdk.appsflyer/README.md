@@ -1,6 +1,6 @@
-# HApps AppsFlyer integration 0.2.3
+# HApps AppsFlyer integration 0.2.4-preview.1
 
-Optional Android attribution for HApps SDK 3.5.1. The package includes AppsFlyer Unity SDK **6.18.1**; remove any other AppsFlyer Unity plugin before installing it. AppsFlyer 7 is not supported.
+Optional Android attribution for HApps SDK 3.6.0-preview.1. The package includes AppsFlyer Unity SDK **6.18.1**; remove any other AppsFlyer Unity plugin before installing it. AppsFlyer 7 is not supported.
 
 Projects upgrading from HApps SDK 3.1.2 should follow [Mobile Migration: SDK 3.1.2 to 3.2.0](../../UnitySDK/Packages/com.happs.sdk/MIGRATION_MOBILE_3.1.2_TO_3.2.0.md).
 
@@ -13,8 +13,8 @@ Add these dependencies to `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.5.1",
-    "com.happs.sdk.appsflyer": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/Integrations/com.happs.sdk.appsflyer#v3.5.1",
+    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.6.0-preview.1",
+    "com.happs.sdk.appsflyer": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/Integrations/com.happs.sdk.appsflyer#v3.6.0-preview.1",
     "com.google.external-dependency-manager": "https://github.com/googlesamples/unity-jar-resolver.git?path=upm#v1.2.188"
   }
 }
@@ -121,3 +121,5 @@ Debug.Log(attribution?.Status ?? "not available");
 ## Verify
 
 Follow the [migration verification steps](../../UnitySDK/Packages/com.happs.sdk/MIGRATION_MOBILE_3.1.2_TO_3.2.0.md#7-verify-the-upgrade).
+
+The portal download link includes its own `clickId` inside `custom_data`. The adapter forwards this value unchanged with conversion data. The portal compares it with its device-registration attribution result.

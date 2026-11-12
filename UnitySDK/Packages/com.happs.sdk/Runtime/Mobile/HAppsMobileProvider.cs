@@ -846,16 +846,45 @@ namespace HAppsSDK
 				signature = signature
 			};
 
+#if UNITY_ANDROID && !UNITY_EDITOR
+            try
+            {
+                using (var unityPlayer = new AndroidJavaClass("com.unity3d.player.UnityPlayer"))
+                using (var activity = unityPlayer.GetStatic<AndroidJavaObject>("currentActivity"))
+                using (var manager = activity.Call<AndroidJavaObject>("getPackageManager"))
+                using (var info = manager.Call<AndroidJavaObject>("getPackageInfo", Application.identifier, 0))
+                using (var build = new AndroidJavaClass("android.os.Build"))
+                using (var version = new AndroidJavaClass("android.os.Build$VERSION"))
+                using (var locales = new AndroidJavaClass("java.util.Locale"))
+                using (var locale = locales.CallStatic<AndroidJavaObject>("getDefault"))
+                using (var zones = new AndroidJavaClass("java.util.TimeZone"))
+                using (var zone = zones.CallStatic<AndroidJavaObject>("getDefault"))
+                {
+                    request.versionCode = info.Get<int>("versionCode");
+                    request.deviceModel = build.GetStatic<string>("MODEL");
+                    request.osVersion = version.GetStatic<string>("RELEASE");
+                    request.locale = locale.Call<string>("toLanguageTag");
+                    request.timeZone = zone.Call<string>("getID");
+                }
+            }
+            catch (Exception ex)
+            {
+                HAppsLog.Warn($"Unable to collect Android attribution metadata; continuing device registration. errorType={ex.GetType().Name}");
+            }
+#endif
+            string customData = null;
 			HAppsLog.Log("Registering mobile device");
 			var response = await SendJsonPostAsync<RegisterDeviceRequest, RegisterDeviceResponse>(
 				BuildPortalUrl(DeviceRegisterPath),
 				request,
-				HttpTimeoutSeconds, stateVersion.CancellationToken);
+				HttpTimeoutSeconds, stateVersion.CancellationToken,
+                json => { if (!JsonRawValueExtractor.TryGetProperty(json, "attribution", out customData)) JsonRawValueExtractor.TryGetProperty(json, "custom_data", out customData); });
 			ThrowIfStateInvalid(stateVersion);
 			if (response == null || string.IsNullOrWhiteSpace(response.deviceId))
 				throw new InvalidOperationException("Device register response is invalid.");
 
 			tokenSet.DeviceId = response.deviceId;
+            tokenSet.Attribution = customData == "null" ? null : customData;
 			await _tokenStore.SaveAsync(tokenSet);
 			ThrowIfStateInvalid(stateVersion);
 			HAppsLog.Log("Mobile device registered");
@@ -998,6 +1027,7 @@ namespace HAppsSDK
 			_currentSession = new MobileSession
 			{
 				DeviceId = tokenSet.DeviceId,
+				Attribution = tokenSet.Attribution,
 				AnalyticProvider = _analyticProvider,
 				AnalyticKey = _analyticKey,
 				AccessToken = tokenSet.AccessToken,
@@ -1084,7 +1114,7 @@ namespace HAppsSDK
 			return request.downloadHandler.text;
 		}
 
-		private async Task<TResponse> SendJsonPostAsync<TRequest, TResponse>(string url, TRequest payload, int timeoutSeconds, CancellationToken cancellationToken)
+		private async Task<TResponse> SendJsonPostAsync<TRequest, TResponse>(string url, TRequest payload, int timeoutSeconds, CancellationToken cancellationToken, Action<string> onResponse = null)
 			where TResponse : class
 		{
 			var json = JsonUtility.ToJson(payload);
@@ -1105,6 +1135,7 @@ namespace HAppsSDK
 				throw CreateHttpException(request);
 			}
 
+			onResponse?.Invoke(responseText);
 			return JsonUtility.FromJson<TResponse>(responseText);
 		}
 
@@ -1136,6 +1167,9 @@ namespace HAppsSDK
 			{
 				provider = attribution.Provider,
 				providerInstallId = attribution.ProviderInstallId,
+                mediaSource = attribution.MediaSource,
+                campaign = attribution.Campaign,
+                campaignId = attribution.CampaignId,
 				haff_pid = attribution.HaffPid,
 				utm_campaign = attribution.UtmCampaign,
 				haff_cid = attribution.HaffCid,
@@ -1633,7 +1667,12 @@ namespace HAppsSDK
 
 		[Serializable]
 		private sealed class RegisterDeviceRequest
-		{
+        {
+            public int versionCode;
+            public string deviceModel;
+            public string osVersion;
+            public string locale;
+            public string timeZone;
 			public string clientId;
 			public string publicKey;
 			public long timestamp;
@@ -1668,6 +1707,9 @@ namespace HAppsSDK
 		{
 			public string provider;
 			public string providerInstallId;
+            public string mediaSource;
+            public string campaign;
+            public string campaignId;
 			public string haff_pid;
 			public string utm_campaign;
 			public string haff_cid;

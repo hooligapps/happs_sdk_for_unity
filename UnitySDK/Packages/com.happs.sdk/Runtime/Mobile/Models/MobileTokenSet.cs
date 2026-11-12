@@ -4,6 +4,7 @@ namespace HAppsSDK
 	public sealed class MobileTokenSet
 	{
 		public string DeviceId;
+        public string Attribution;
 		public string DeviceKeyAlias;
 		public string DevicePrivateKey;
 		public string DevicePublicKey;

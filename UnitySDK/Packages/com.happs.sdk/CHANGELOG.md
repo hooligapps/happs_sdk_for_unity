@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.6.0-preview.1
+
+- Send Android device metadata during registration for portal download attribution, without blocking registration if collection fails
+- Preserve portal attribution in mobile sessions and forward AppsFlyer campaign fields
+
 ## 3.5.1
 
 - Add `UserData.ageConfirmed` for the profile age-confirmation state

@@ -15,7 +15,7 @@ namespace HAppsSDK
                 TryGetProperty(parentJson, childProperty, out rawValue);
         }
 
-        private static bool TryGetProperty(string json, string propertyName, out string rawValue)
+        internal static bool TryGetProperty(string json, string propertyName, out string rawValue)
         {
             rawValue = null;
             if (string.IsNullOrEmpty(json) || string.IsNullOrEmpty(propertyName))
