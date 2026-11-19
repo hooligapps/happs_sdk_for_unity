@@ -1,6 +1,6 @@
 # HApps Unity SDK
 
-Unity SDK 3.5.1 for HApps WebGL integrations through JS SDK 1.1.2 and native Android integrations.
+Unity SDK 3.6.0-preview.3 for HApps WebGL integrations through JS SDK 1.2.0 and native Android integrations.
 Optional mobile attribution is provided by the separate [AppsFlyer adapter](../../../Integrations/com.happs.sdk.appsflyer/README.md), which is not a dependency of this package.
 
 ## Installation
@@ -10,13 +10,13 @@ Add the package to your Unity project through `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.5.1",
+    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.6.0-preview.3",
     "com.google.external-dependency-manager": "https://github.com/googlesamples/unity-jar-resolver.git?path=upm#v1.2.188"
   }
 }
 ```
 
-Use the release tag `v3.5.1`.
+Use the release tag `v3.6.0-preview.3`.
 
 Run `Assets > External Dependency Manager > Android Resolver > Force Resolve` for Android builds.
 
@@ -98,8 +98,8 @@ Awaited WebGL and mobile operations also provide `CancellationToken` overloads. 
 
 Your WebGL page must:
 
-- load `https://cdn.hooli.games/sdk/1.1.2/hooligapps.js`
-- use the JS SDK `1.1.2` contract; unversioned builds are not supported by Unity SDK `3.5.1`
+- load `https://cdn.hooli.games/sdk/1.2.0/hooligapps.js`
+- use the JS SDK `1.2.0` contract; unversioned builds are not supported by Unity SDK `3.6.0-preview.3`
 - initialize the core client with `HApps.init(...)`
 - attach Unity with `HApps.unity.attach(...)`
 - use `objectName: "HAppsJSBridge"`
@@ -128,6 +128,8 @@ Embedded portal flow:
 - use `UserData.verified` for email verification and `UserData.ageConfirmed` for age confirmation
 - call `HApps.Web.OpenPortalAuthPopup()` when the game must show portal login UI
 - call `HApps.Web.OpenAgeVerification()` when the game must show portal age verification UI
+- use `UserData.locale` for the portal language when available, with a fallback for missing or unsupported values
+- `UserData.id` is the game profile UUID and `userId` is the game-owned identifier, including for games using the legacy identity exception before JS SDK 1.2.0
 - call `HApps.Web.SetFullscreen(enabled)` to switch the portal fullscreen layout
 - call `HApps.Web.OpenExternalUrl(url)` to ask the portal to open an external URL
 - subscribe to `HApps.Web.AuthCompleted` if auth can complete outside the awaited popup flow; `WebAuthResult.Action` is `SignUp`, `Linked`, `Login`, or `Unknown` for missing and unknown values
@@ -136,8 +138,8 @@ Embedded portal flow:
 
 If the connected profile is already verified, `OpenPortalAuthPopup()` returns a successful `WebAuthResult` with `Action == Unknown` locally without opening a popup or emitting a new `AuthCompleted` event.
 
-`SetTheaterMode(bool)` is dispatched by JS SDK 1.1.2.
-`SetFullscreen(bool)` is dispatched by JS SDK 1.1.2.
+`SetTheaterMode(bool)` is dispatched by JS SDK 1.2.0.
+`SetFullscreen(bool)` is dispatched by JS SDK 1.2.0.
 
 Example subscription:
 
@@ -165,7 +167,7 @@ private void HandleAuthCompleted(WebAuthResult result)
 - `OpenIdpAuthPopup(url)` returns `AuthPopupData`, not plain `string`
 - `AuthPopupData` supports both ticket-based and cookie-based session auth
 - `Connect()` and `OpenPortalAuthPopup()` are separate steps
-- `OpenAgeVerification()` starts the flow; completion is reported through `AgeVerificationCompleted`
+- `OpenAgeVerification()` starts the flow; completion is reported through `AgeVerificationCompleted`. On confirmation, `CurrentUser.ageConfirmed` is updated before the event when a current user is available
 - `AuthPopupData.payloadJson` preserves the optional popup payload as raw JSON
 - `UserChanged` updates `CurrentUser` before invoking subscribers
 - `Error` is not correlated with a specific pending operation
@@ -178,3 +180,5 @@ private void HandleAuthCompleted(WebAuthResult result)
 - payment fulfillment must be checked through the game backend; the Unity SDK does not validate postbacks or poll payment delivery
 - mobile `GetProfile()` and mobile `MakePayment(orderId)` are not part of the current native flow
 - sample scene/scripts remain in the host project, not in the package
+
+Mobile login can be retried immediately: a new `LoginAsync()` cancels the previous attempt and starts a fresh one. Handle `OperationCanceledException` for the replaced call. Closing the browser alone does not complete it; network requests retain their own timeouts.

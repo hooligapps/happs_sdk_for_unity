@@ -14,7 +14,6 @@ namespace HAppsSDK
 	{
 		private const int SessionExpirySkewSeconds = 5;
 		private const int HttpTimeoutSeconds = 30;
-		private const int LoginTimeoutMs = 180000;
 		private const int LogoutTimeoutMs = 180000;
 		private const string TokenStorageKeyPrefix = "happs.mobile.state.v1";
 		private const string AuthorityPath = "/idp/oidc";
@@ -44,7 +43,6 @@ namespace HAppsSDK
 		private int _sessionRefreshVersion;
 		private CancellationTokenSource _activeLoginCancellation;
 		private readonly CancellationTokenSource _lifetimeCancellation = new CancellationTokenSource();
-		private bool _loginInProgress;
 		private bool _paymentInProgress;
 		private bool _disposed;
 		private int _stateVersion;
@@ -185,9 +183,8 @@ namespace HAppsSDK
 			EnsureConfigured();
 			EnsureOidcConfigured();
 			cancellationToken.ThrowIfCancellationRequested();
-			using var timeout = new CancellationTokenSource(LoginTimeoutMs);
 			using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(
-				cancellationToken, timeout.Token, _lifetimeCancellation.Token);
+				cancellationToken, _lifetimeCancellation.Token);
 			var stateVersion = BeginLogin(cancellation);
 			Action<string> onDeepLink = null;
 			try
@@ -217,10 +214,6 @@ namespace HAppsSDK
 				if (!query.TryGetValue("code", out var code) || string.IsNullOrWhiteSpace(code))
 					throw new InvalidOperationException("OIDC redirect does not contain authorization code.");
 				return await CompleteLoginAsync(code, start.state, codeVerifier, stateVersion);
-			}
-			catch (OperationCanceledException) when (timeout.IsCancellationRequested && !cancellationToken.IsCancellationRequested && !_disposed)
-			{
-				throw new TimeoutException("Mobile login timed out.");
 			}
 			finally
 			{
@@ -545,9 +538,9 @@ namespace HAppsSDK
 			lock (_lifecycleSync)
 			{
 				ThrowIfDisposed();
-				if (_loginInProgress) throw new InvalidOperationException("Mobile login is already in progress.");
 				var context = CaptureStateVersion(cancellation.Token);
-				_loginInProgress = true;
+				_activeLoginCancellation?.Cancel();
+				_pendingLoginState = null;
 				_activeLoginCancellation = cancellation;
 				return context;
 			}
@@ -560,7 +553,6 @@ namespace HAppsSDK
 				if (!ReferenceEquals(_activeLoginCancellation, cancellation)) return;
 				_activeLoginCancellation = null;
 				_pendingLoginState = null;
-				_loginInProgress = false;
 			}
 		}
 

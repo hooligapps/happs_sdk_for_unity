@@ -8,7 +8,7 @@ namespace HAppsSDK
 {
     public sealed class HAppsWebProvider : HAppsProvider
     {
-        public const string Version = "3.5.1";
+        public const string Version = "3.6.0-preview.3";
 
         public event Action<WebAuthResult> AuthCompleted;
         public event Action<bool> AgeVerificationCompleted;
@@ -408,6 +408,9 @@ namespace HAppsSDK
 
         private void HandleAgeVerificationCompleted(bool confirmed)
         {
+            if (confirmed && _userData != null)
+                _userData.ageConfirmed = true;
+
             HAppsEvents.Invoke(AgeVerificationCompleted, confirmed);
         }
 

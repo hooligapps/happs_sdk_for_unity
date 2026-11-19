@@ -8,6 +8,7 @@ namespace HAppsSDK
 		public string id;
 		public string userId;
 		public string userName;
+		public string locale;
 		public bool verified;
 		public bool ageConfirmed;
 
