@@ -6,9 +6,9 @@ Changes to configuration, cancellation, session events and exceptions are docume
 
 ## 1. Requirements and environments
 
-Device registration collects the Google Advertising ID as `advId` when available and permitted. Set `CollectAdvertisingId = false` in `HAppsMobileAuthOptions` before configuring mobile to disable collection. This setting is independent of AppsFlyer's `CollectAdvertisingIdentifiers`. Registration proceeds without the ID if it is unavailable, restricted, or retrieval takes more than two seconds. The core Android package resolves Google Play services ads identifier and declares the `AD_ID` permission.
+The existing `v3.6.0-preview.3` tag does not include the attribution changes described below; use a subsequent release containing this branch. Device registration collects the Google Advertising ID as `advId` when available and permitted. Set `CollectAdvertisingId = false` in `HAppsMobileAuthOptions` before configuring mobile to disable collection. This setting is independent of AppsFlyer's `CollectAdvertisingIdentifiers`. Registration proceeds without the ID if it is unavailable, restricted, or retrieval takes more than two seconds. The core Android package resolves Google Play services ads identifier and declares the `AD_ID` permission.
 
-- HApps Unity SDK `3.6.0-preview.2`.
+- HApps Unity SDK `3.6.0-preview.3`.
 - Android API 23 or newer.
 - iOS is not supported.
 
@@ -38,7 +38,7 @@ Add the package to `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.6.0-preview.2",
+    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.6.0-preview.3",
     "com.google.external-dependency-manager": "https://github.com/googlesamples/unity-jar-resolver.git?path=upm#v1.2.188"
   }
 }
@@ -49,7 +49,7 @@ Run `Assets > External Dependency Manager > Android Resolver > Force Resolve` af
 The core package resolves AndroidX Browser 1.8.0 and supports the default Unity 2022.3 Android toolchain. It opens authentication, logout and payment in Custom Tabs. Unity 6 projects with Android Gradle Plugin 8.1 or newer can add Auth Tab payment returns with the optional package:
 
 ```json
-"com.happs.sdk.browser-auth-tab": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/Integrations/com.happs.sdk.browser-auth-tab#v3.6.0-preview.2"
+"com.happs.sdk.browser-auth-tab": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/Integrations/com.happs.sdk.browser-auth-tab#v3.6.0-preview.3"
 ```
 
 The optional package upgrades AndroidX Browser to 1.9.0. Re-run Force Resolve after adding or removing it. Do not install it in a Unity 2022.3 project that uses the default Gradle 7.2 and Android Gradle Plugin 7.1.2 toolchain.
@@ -245,8 +245,8 @@ if (!login.IsSuccess)
 string publicId = login.PublicId;
 ```
 
-- Only one `LoginAsync()` may run at a time; a second call throws `InvalidOperationException`.
-- The operation throws `TimeoutException` if the entire login attempt does not complete within 180 seconds.
+- Calling `LoginAsync()` again cancels the previous attempt and starts a new one with a fresh state and PKCE verifier. Handle `OperationCanceledException` for the superseded call. A callback from an older attempt is ignored.
+- Closing the browser does not complete the pending call. The player can press login again; there is no SDK-wide login timeout. Individual network requests still have timeouts, and the server expires unused login states.
 - If Android terminates the game while the browser is open, the login cannot be resumed. Start login again after relaunch.
 - Reload the player from the game backend after successful login.
 

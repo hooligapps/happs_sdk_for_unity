@@ -6,6 +6,7 @@ namespace HAppsSDK
 		SignUp,
 		Linked,
 		Login,
+		Cancel,
 	}
 
 	internal static class AuthActionParser
@@ -17,6 +18,7 @@ namespace HAppsSDK
 				"sign_up" => AuthAction.SignUp,
 				"linked" => AuthAction.Linked,
 				"login" => AuthAction.Login,
+				"cancel" => AuthAction.Cancel,
 				_ => AuthAction.Unknown,
 			};
 		}

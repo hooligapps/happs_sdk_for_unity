@@ -1,6 +1,6 @@
 # HApps Unity SDK
 
-Unity SDK 3.6.0-preview.2 for HApps WebGL integrations through JS SDK 1.1.2 and native Android integrations. Optional Android attribution is available through the separate [AppsFlyer integration package](Integrations/com.happs.sdk.appsflyer/README.md), which includes the official AppsFlyer Unity SDK 6.18.1.
+Unity SDK 3.6.0-preview.3 for HApps WebGL integrations through JS SDK 1.2.0 and native Android integrations. Optional Android attribution is available through the separate [AppsFlyer integration package](Integrations/com.happs.sdk.appsflyer/README.md), which includes the official AppsFlyer Unity SDK 6.18.1.
 
 ## Installation
 
@@ -9,7 +9,7 @@ Add the package to your Unity project through `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.6.0-preview.2",
+    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.6.0-preview.3",
     "com.google.external-dependency-manager": "https://github.com/googlesamples/unity-jar-resolver.git?path=upm#v1.2.188"
   }
 }
@@ -80,11 +80,11 @@ Method semantics:
 - `HApps.Web.OpenIdpAuthPopup(url, callbackOrigin)` opens standalone backend auth popup and returns `AuthPopupData` for either ticket-based or cookie-based session auth. `callbackOrigin` is optional and otherwise defaults to the popup URL origin.
 - `HApps.Web.OpenPortalAuthPopup()` opens portal-managed auth UI and returns `WebAuthResult`. If the connected profile is already verified, it returns a successful result with `Action == Unknown` locally without opening a popup or emitting a new `AuthCompleted` event.
 - `HApps.Web.OpenAgeVerification()` opens portal-managed age verification UI from the game.
-- `HApps.Web.SetFullscreen(enabled)` sends the fullscreen request through JS SDK 1.1.2.
-- `HApps.Web.SetTheaterMode(enabled)` sends the theater-mode request through JS SDK 1.1.2.
-- `HApps.Web.OpenExternalUrl(url)` asks JS SDK 1.1.2 and the portal to open the URL externally.
+- `HApps.Web.SetFullscreen(enabled)` sends the fullscreen request through JS SDK 1.2.0.
+- `HApps.Web.SetTheaterMode(enabled)` sends the theater-mode request through JS SDK 1.2.0.
+- `HApps.Web.OpenExternalUrl(url)` asks JS SDK 1.2.0 and the portal to open the URL externally.
 - `HApps.Web.AuthCompleted` fires with `WebAuthResult` when the external page script sends `auth_complete`, even if you are not awaiting `OpenPortalAuthPopup()`.
-- `HApps.Web.AgeVerificationCompleted` fires with the `confirmed` flag when the portal completes age verification.
+- `HApps.Web.AgeVerificationCompleted` fires with the `confirmed` flag when the portal completes age verification. On confirmation, `CurrentUser.ageConfirmed` is updated before subscribers are called if a current user is available.
 - `HApps.Web.UserChanged` fires on JS SDK `user_changed` and updates `HApps.Web.CurrentUser` first.
 - `HApps.Web.Error` exposes errors reported by the JS SDK. These errors are not correlated with a specific pending operation.
 - `HApps.Web.IsPortalSite()` reflects `window.HApps.isPortal()` from the JS environment.
@@ -172,7 +172,7 @@ switch (authPopupData.Flow)
 ### Standalone WebGL Template Example
 
 ```html
-<script src="https://cdn.hooli.games/sdk/1.1.2/hooligapps.js"></script>
+<script src="https://cdn.hooli.games/sdk/1.2.0/hooligapps.js"></script>
 ```
 
 ```javascript
@@ -238,10 +238,10 @@ This flow requires platform JS bootstrap and Unity-side connection.
 
 ### WebGL Template Setup
 
-Load JS SDK 1.1.2, initialize the core client, and attach the Unity bridge.
+Load JS SDK 1.2.0, initialize the core client, and attach the Unity bridge.
 
 ```html
-<script src="https://cdn.hooli.games/sdk/1.1.2/hooligapps.js"></script>
+<script src="https://cdn.hooli.games/sdk/1.2.0/hooligapps.js"></script>
 ```
 
 ### Portal WebGL Template Example
@@ -249,7 +249,7 @@ Load JS SDK 1.1.2, initialize the core client, and attach the Unity bridge.
 Example portal page setup:
 
 ```html
-<script src="https://cdn.hooli.games/sdk/1.1.2/hooligapps.js"></script>
+<script src="https://cdn.hooli.games/sdk/1.2.0/hooligapps.js"></script>
 ```
 
 ```javascript
@@ -437,6 +437,9 @@ if (profile != null)
 - `userName`
 - `verified`: whether the email is verified
 - `ageConfirmed`: whether age confirmation is complete
+- `locale`: portal language when provided; fall back if missing or unsupported
+
+`id` is the game profile UUID; `userId` is the game-owned identifier. With JS SDK 1.2.0, this also applies to games that previously received the profile UUID as `userId`.
 
 ## AuthPopupData
 
@@ -498,9 +501,9 @@ Backend must:
 
 1. Validate launch token with the platform.
 2. Create or load the user.
-3. Return the signature expected by JS SDK 1.1.2. User data comes from the platform launch message, not this response.
+3. Return the signature expected by JS SDK 1.2.0. User data comes from the platform launch message, not this response.
 
-JS SDK 1.1.2 sends this request body:
+JS SDK 1.2.0 sends this request body:
 
 ```json
 {
@@ -536,8 +539,10 @@ Expected response shape:
 
 ## Version
 
-HApps Unity SDK - Integration Guide v3.6.0-preview.2 (JS SDK 1.1.2)
+HApps Unity SDK - Integration Guide v3.6.0-preview.3 (JS SDK 1.2.0)
 
 ### Portal download attribution
+
+The existing `v3.6.0-preview.3` tag does not include these attribution changes; use a subsequent release containing this branch.
 
 Android device registration sends the installed version code, model, OS version, system locale and time zone. It also sends the Google Advertising ID as `advId` when available and permitted. Set `HAppsMobileAuthOptions.CollectAdvertisingId` to `false` before configuring mobile to disable its collection; this setting is independent of AppsFlyer. Collection times out after two seconds and registration continues without an ID. The portal can return a matched download's `attribution`. The SDK preserves this JSON in `MobileSession.Attribution` and device storage. When calling `/api/hooli/mobile/auth` on the game backend, parse the JSON string and add its string-valued fields as URL-encoded query parameters. Order records these fields in `reg.query_params`. Send the access token in the request body. Attribution data is for analytics and session identity comes from the verified access token.

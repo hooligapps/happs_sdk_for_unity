@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.6.0-preview.3
+
+- Update the current WebGL profile before notifying age verification subscribers.
+
+- Allow a new mobile login attempt to cancel and replace a pending attempt, without a login-wide timeout.
+- Support JS SDK 1.2.0 locale and cancelled auth action.
+
 ## 3.6.0-preview.2
 
 - Include the Google Advertising ID in device registration when available and enabled
