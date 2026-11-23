@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.6.0-preview.4
+
+- Combine portal download attribution with the WebGL and mobile login updates from preview.3
+- Send the Google Advertising ID as `advId` during device registration when available and enabled
+
 ## 3.6.0-preview.3
 
 - Update the current WebGL profile before notifying age verification subscribers.

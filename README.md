@@ -1,6 +1,6 @@
 # HApps Unity SDK
 
-Unity SDK 3.6.0-preview.3 for HApps WebGL integrations through JS SDK 1.2.0 and native Android integrations. Optional Android attribution is available through the separate [AppsFlyer integration package](Integrations/com.happs.sdk.appsflyer/README.md), which includes the official AppsFlyer Unity SDK 6.18.1.
+Unity SDK 3.6.0-preview.4 for HApps WebGL integrations through JS SDK 1.2.0 and native Android integrations. Optional Android attribution is available through the separate [AppsFlyer integration package](Integrations/com.happs.sdk.appsflyer/README.md), which includes the official AppsFlyer Unity SDK 6.18.1.
 
 ## Installation
 
@@ -9,7 +9,7 @@ Add the package to your Unity project through `Packages/manifest.json`:
 ```json
 {
   "dependencies": {
-    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.6.0-preview.3",
+    "com.happs.sdk": "https://github.com/hooligapps/happs_sdk_for_unity.git?path=/UnitySDK/Packages/com.happs.sdk#v3.6.0-preview.4",
     "com.google.external-dependency-manager": "https://github.com/googlesamples/unity-jar-resolver.git?path=upm#v1.2.188"
   }
 }
@@ -539,10 +539,8 @@ Expected response shape:
 
 ## Version
 
-HApps Unity SDK - Integration Guide v3.6.0-preview.3 (JS SDK 1.2.0)
+HApps Unity SDK - Integration Guide v3.6.0-preview.4 (JS SDK 1.2.0)
 
 ### Portal download attribution
-
-The existing `v3.6.0-preview.3` tag does not include these attribution changes; use a subsequent release containing this branch.
 
 Android device registration sends the installed version code, model, OS version, system locale and time zone. It also sends the Google Advertising ID as `advId` when available and permitted. Set `HAppsMobileAuthOptions.CollectAdvertisingId` to `false` before configuring mobile to disable its collection; this setting is independent of AppsFlyer. Collection times out after two seconds and registration continues without an ID. The portal can return a matched download's `attribution`. The SDK preserves this JSON in `MobileSession.Attribution` and device storage. When calling `/api/hooli/mobile/auth` on the game backend, parse the JSON string and add its string-valued fields as URL-encoded query parameters. Order records these fields in `reg.query_params`. Send the access token in the request body. Attribution data is for analytics and session identity comes from the verified access token.
